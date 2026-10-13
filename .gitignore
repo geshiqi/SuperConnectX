@@ -14,3 +14,6 @@ pnpm-debug.log*
 
 # graphify 知识图谱本地产物
 graphify-out/
+
+# Codex CLI 本地配置(本机 MCP 地址等)
+.codex/
