@@ -48,7 +48,7 @@ export default class IpcTasks {
       return { success: true, tasks }
     })
 
-    ipcMain.handle('task:run', async (_, { taskId }: { taskId: string }) => {
+    ipcMain.handle('task:run', async (_, { taskId, external }: { taskId: string; external?: boolean }) => {
       const task = this.storage.getTask(taskId)
       if (!task) return { success: false, message: '任务不存在' }
       if (this.runner.isRunning()) return { success: false, message: '已有任务在运行中' }
@@ -58,6 +58,8 @@ export default class IpcTasks {
         .run(task, {
           activeSessionId: this.activeSessionId,
           connector: this.connector,
+          external: external === true,
+          taskName: task.name,
           emit: (event) => this.emitToPalette({ ...event, runId })
         })
         .catch((error) => {

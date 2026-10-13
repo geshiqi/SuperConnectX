@@ -4,6 +4,9 @@
  * 内置动作通过 IpcConnector 的会话接口完成(与 MCP 共用同一层,用户会话同样注册其中)。
  */
 import { spawn, type ChildProcess } from 'node:child_process'
+import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
 import * as iconv from 'iconv-lite'
 import type {
   TaskShellStep,
@@ -27,6 +30,10 @@ export interface RunOptions {
   activeSessionId: string | null
   emit: (event: TaskRunEvent) => void
   connector: TaskConnector
+  /** shell 步骤在新控制台窗口运行,输出显示在外部终端(仅 Windows) */
+  external?: boolean
+  /** 任务名(外部终端窗口标题用) */
+  taskName?: string
 }
 
 interface StepResult {
@@ -135,6 +142,12 @@ export class TaskRunner {
   }
 
   private async runShell(step: TaskShellStep, options: RunOptions): Promise<StepResult> {
+    if (options.external) {
+      if (process.platform === 'win32') {
+        return await this.runShellExternal(step, options)
+      }
+      options.emit({ kind: 'output', runId: '', stream: 'info', text: '外部终端模式仅支持 Windows,本步骤在面板内执行' })
+    }
     const { file, args } = this.buildShellCommand(step)
     const encoding = step.encoding || 'utf8'
     const isCmd = process.platform === 'win32' && (step.shell || 'cmd') === 'cmd'
@@ -208,6 +221,85 @@ export class TaskRunner {
         }
         if (this.aborted) finish(false, code ?? undefined, 'aborted')
         else finish(code === 0, code ?? undefined, code === 0 ? undefined : `exit code ${code}`)
+      })
+    })
+  }
+
+  /**
+   * 外部终端模式(Windows):新控制台窗口运行命令,输出显示在窗口中。
+   * `start /wait` 不透传退出码,改由包装脚本把 %errorlevel% 写入标记文件回收;
+   * 命令结束后 pause 保持窗口可读,按键关闭才继续下一步。
+   */
+  private async runShellExternal(step: TaskShellStep, options: RunOptions): Promise<StepResult> {
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scx-task-'))
+    const wrapper = path.join(workDir, 'run.cmd')
+    const marker = path.join(workDir, 'exit.code')
+    const title = `SCX ${options.taskName || 'Task'}`
+    // 注意:`> file echo %errorlevel%` 的重定向必须前置,`echo 7> file` 会把 7 当文件描述符
+    fs.writeFileSync(
+      wrapper,
+      ['@echo off', step.command, `> "${marker}" echo %errorlevel%`, 'pause'].join('\r\n'),
+      'utf8'
+    )
+
+    const cleanup = (): void => {
+      try {
+        fs.rmSync(workDir, { recursive: true, force: true })
+      } catch { /* ignore */ }
+    }
+
+    return new Promise<StepResult>((resolve) => {
+      let child: ChildProcess
+      try {
+        child = spawn('cmd.exe', ['/d', '/s', '/c', `start /wait "${title}" cmd /c "${wrapper}"`], {
+          cwd: step.cwd || undefined,
+          windowsVerbatimArguments: true,
+          windowsHide: false
+        })
+      } catch (error) {
+        cleanup()
+        return resolve({ success: false, message: `启动失败: ${(error as Error).message}` })
+      }
+      this.currentShell = child
+
+      options.emit({
+        kind: 'output',
+        runId: '',
+        stream: 'info',
+        text: `已在外部终端窗口「${title}」中运行,输出显示在该窗口;命令结束后按任意键关闭窗口继续`
+      })
+
+      let settled = false
+      let timer: NodeJS.Timeout | undefined
+      const finish = (result: StepResult): void => {
+        if (settled) return
+        settled = true
+        if (timer) clearTimeout(timer)
+        if (this.currentShell === child) this.currentShell = null
+        cleanup()
+        resolve(result)
+      }
+
+      if (step.timeoutMs && step.timeoutMs > 0) {
+        timer = setTimeout(() => {
+          options.emit({ kind: 'output', runId: '', stream: 'info', text: `超时(${step.timeoutMs}ms),终止外部终端` })
+          this.killShell(child)
+          finish({ success: false, message: `timeout after ${step.timeoutMs}ms` })
+        }, step.timeoutMs)
+      }
+
+      child.on('error', (error) => finish({ success: false, message: error.message }))
+      child.on('close', () => {
+        if (this.aborted) {
+          finish({ success: false, message: 'aborted' })
+          return
+        }
+        try {
+          const code = parseInt(fs.readFileSync(marker, 'utf8').trim(), 10)
+          finish({ success: code === 0, exitCode: code, message: code === 0 ? undefined : `exit code ${code}` })
+        } catch {
+          finish({ success: false, message: '外部终端窗口提前关闭,未获取到退出码' })
+        }
       })
     })
   }

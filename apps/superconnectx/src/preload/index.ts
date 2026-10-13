@@ -204,7 +204,8 @@ contextBridge.exposeInMainWorld('taskApi', {
   list: (): Promise<import('../shared/tasks/UserTask').UserTask[]> => ipcRenderer.invoke('task:list'),
   save: (task: import('../shared/tasks/UserTask').UserTask): Promise<{ success: boolean; tasks?: import('../shared/tasks/UserTask').UserTask[]; message?: string }> => ipcRenderer.invoke('task:save', task),
   delete: (id: string): Promise<{ success: boolean; tasks: import('../shared/tasks/UserTask').UserTask[] }> => ipcRenderer.invoke('task:delete', id),
-  run: (taskId: string): Promise<{ success: boolean; runId?: string; message?: string }> => ipcRenderer.invoke('task:run', { taskId }),
+  run: (taskId: string, options?: { external?: boolean }): Promise<{ success: boolean; runId?: string; message?: string }> =>
+    ipcRenderer.invoke('task:run', { taskId, external: options?.external }),
   stop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('task:stop'),
   isRunning: (): Promise<boolean> => ipcRenderer.invoke('task:is-running'),
   notifyActiveSession: (sessionId: string | null): void => {

@@ -61,6 +61,18 @@ describe('TaskRunner', () => {
     expect(stepEnd.exitCode).toBe(0)
   })
 
+  // Windows 下 external 模式会弹真实控制台窗口,单测跳过,行为由手动验证覆盖
+  it.skipIf(process.platform === 'win32')('external 模式在非 Windows 回退为面板内执行', async () => {
+    const { events, emit } = collect()
+    const result = await runner.run(
+      runTask([{ type: 'shell', command: 'node -p 42' }]),
+      { activeSessionId: null, emit, connector: makeConnector(), external: true, taskName: 'T' }
+    )
+    expect(result.success).toBe(true)
+    const outputs = events.filter((e) => e.kind === 'output') as Array<{ kind: 'output'; text: string }>
+    expect(outputs.some((e) => e.text.includes('42'))).toBe(true)
+  })
+
   it('shell 步骤失败且 stopOnFail 默认为 true 时终止任务', async () => {
     const { events, emit } = collect()
     const result = await runner.run(

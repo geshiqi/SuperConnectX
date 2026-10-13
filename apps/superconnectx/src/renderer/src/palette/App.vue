@@ -47,6 +47,16 @@
           <el-button size="small" text type="primary" :disabled="isRunning" @click="runTask(task)">
             <el-icon><CaretRight /></el-icon>
           </el-button>
+          <el-button
+            size="small"
+            text
+            type="success"
+            :disabled="isRunning"
+            :title="t('palette.runExternal')"
+            @click="runTask(task, true)"
+          >
+            <el-icon><Monitor /></el-icon>
+          </el-button>
           <el-button size="small" text @click="openEditor(task)">
             <el-icon><Edit /></el-icon>
           </el-button>
@@ -205,9 +215,9 @@ const loadTasks = async (): Promise<void> => {
   }
 }
 
-const runTask = async (task: UserTask): Promise<void> => {
+const runTask = async (task: UserTask, external = false): Promise<void> => {
   if (isRunning.value) return
-  const result = await window.taskApi.run(task.id)
+  const result = await window.taskApi.run(task.id, { external })
   if (!result.success && result.message) {
     appendOutput(result.message, 'stderr')
   }
