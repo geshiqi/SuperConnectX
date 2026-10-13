@@ -34,6 +34,11 @@ export function initAppPaths(): void {
   appPaths.init()
 }
 
+/** 退出时释放实例下标锁(多实例自动编号) */
+export function releaseInstanceLock(): void {
+  appPaths.releaseInstanceLock()
+}
+
 /** Must be called after `app.whenReady()`. */
 export function cleanupChromiumClutter(logger?: AppPathLogger): void {
   appPaths.cleanupChromiumClutter(logger)

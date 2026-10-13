@@ -41,6 +41,7 @@ const CHROMIUM_CLUTTER_PATTERNS = [
  */
 export class AppPaths {
   private instanceIndex: number | undefined
+  private instanceLockFile: string | null = null
   private readonly options: Required<AppPathsOptions>
 
   constructor(options: AppPathsOptions = {}) {
@@ -56,9 +57,62 @@ export class AppPaths {
     if (this.instanceIndex !== undefined) return this.instanceIndex
     const indexArgument = process.argv.find((argument) => argument.startsWith('--instance-index='))
     const candidate = indexArgument?.split('=')[1] ?? process.env.SCX_INSTANCE_INDEX
-    const parsed = candidate === undefined ? 0 : Number.parseInt(candidate, 10)
-    this.instanceIndex = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+    if (candidate !== undefined) {
+      const parsed = Number.parseInt(candidate, 10)
+      this.instanceIndex = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+      return this.instanceIndex
+    }
+    // 未显式指定(用户直接双击):自动探测空闲下标,双开的第二个实例拿到 1、2…
+    // 各实例 Chromium session 目录互不相同,避免 profile 锁竞争导致的启动卡顿/白屏
+    this.instanceIndex = this.acquireFreeInstanceIndex()
     return this.instanceIndex
+  }
+
+  private acquireFreeInstanceIndex(): number {
+    const userData = app.getPath('userData')
+    try {
+      fs.mkdirSync(userData, { recursive: true })
+    } catch { /* ignore */ }
+    for (let index = 0; index < 32; index++) {
+      const lockFile = path.join(userData, `.instance-${index}.lock`)
+      try {
+        fs.writeFileSync(lockFile, String(process.pid), { flag: 'wx' })
+        this.instanceLockFile = lockFile
+        return index
+      } catch {
+        if (this.isLockHolderAlive(lockFile)) continue
+        try {
+          fs.unlinkSync(lockFile)
+          fs.writeFileSync(lockFile, String(process.pid), { flag: 'wx' })
+          this.instanceLockFile = lockFile
+          return index
+        } catch {
+          continue // 与其他实例抢占竞争失败,试下一个
+        }
+      }
+    }
+    return 0
+  }
+
+  private isLockHolderAlive(lockFile: string): boolean {
+    try {
+      const pid = Number.parseInt(fs.readFileSync(lockFile, 'utf8').trim(), 10)
+      if (!Number.isFinite(pid) || pid <= 0) return false
+      process.kill(pid, 0)
+      return true
+    } catch (error) {
+      // EPERM:进程存在但无权限发信号,同样视为存活
+      return (error as NodeJS.ErrnoException).code === 'EPERM'
+    }
+  }
+
+  /** 退出时释放实例下标锁;进程崩溃残留的锁由 PID 存活检测自愈 */
+  releaseInstanceLock(): void {
+    if (!this.instanceLockFile) return
+    try {
+      const pid = Number.parseInt(fs.readFileSync(this.instanceLockFile, 'utf8').trim(), 10)
+      if (pid === process.pid) fs.unlinkSync(this.instanceLockFile)
+    } catch { /* ignore */ }
   }
 
   getExeDir(): string {

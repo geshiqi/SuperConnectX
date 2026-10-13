@@ -13,7 +13,7 @@ import IpcMain from './ipc/IpcMain'
 import IpcDataCheck from './ipc/IpcDataCheck'
 import IpcTasks from './ipc/IpcTasks'
 import logger from './ipc/IpcAppLogger'
-import { migrateDataIfNeeded, initAppPaths, cleanupChromiumClutter, getInstanceIndex } from './utils/AppDir'
+import { migrateDataIfNeeded, initAppPaths, cleanupChromiumClutter, getInstanceIndex, releaseInstanceLock } from './utils/AppDir'
 import McpHttpServer from './mcp/McpHttpServer'
 import SuperConnectXMcpFacade from './mcp/SuperConnectXMcpFacade'
 import { McpTemplateRegistry } from './mcp/McpTemplateRegistry'
@@ -127,6 +127,11 @@ ipcMain.handle('mcp:get-skill-install-info', () => ({
 
 logger.info(`======== start superconnect-x (instance ${instanceIdx}) ========`)
 logger.info(JSON.stringify(IpcMain.getInstance().getVersionInfo()))
+
+// 退出时释放多实例下标锁
+app.on('will-quit', () => {
+  releaseInstanceLock()
+})
 
 // 迁移旧数据：如果 EXE 目录下存在旧的 userdata/backup，拷贝到 appDataDir 并删除旧目录
 migrateDataIfNeeded(logger)

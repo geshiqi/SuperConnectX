@@ -81,13 +81,19 @@ export default class IpcMain {
           sandbox: false, // 关闭沙箱（需访问系统资源，如 SSH 连接）
           contextIsolation: true, // 保持隔离（安全最佳实践）
           nodeIntegration: false, // 禁用直接 Node 集成，通过 preload 暴露 API
-          backgroundThrottling: false // 禁用后台节流，防止切换窗口时卡顿
+          backgroundThrottling: false // 禁用后台节流，防止切换窗口后卡顿
         },
+        show: false, // 渲染就绪后再显示,避免启动期空白窗口
         ...getWindowFrameOptions(process.platform)
       })
 
       // 启动默认最大化(用户可还原,窗口尺寸仍以 1200x800 为还原基准)
       mainWindow.maximize()
+
+      // 渲染进程首帧就绪后再显示窗口
+      mainWindow.once('ready-to-show', () => {
+        mainWindow.show()
+      })
 
       // 加载界面（开发环境加载 Vite 服务，生产环境加载本地 HTML）
       if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
