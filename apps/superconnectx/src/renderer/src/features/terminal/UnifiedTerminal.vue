@@ -86,7 +86,8 @@
     <div class="terminal-input">
       <!-- 第一行：输入栏 -->
       <div class="input-row">
-        <div class="input-controls terminal-switch" v-if="connection?.connectionType === 'com'">
+        <!-- CRLF/HEX 开关对串口与 Telnet/FTP 一致开放;HEX 高字节透传与换行均由后端按渲染层开关处理 -->
+        <div class="input-controls terminal-switch" v-if="['com', 'telnet', 'ftp'].includes(String(connection?.connectionType))">
           <el-switch
             width="50"
             v-model="autoNewline"
