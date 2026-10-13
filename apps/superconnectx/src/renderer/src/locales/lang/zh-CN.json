@@ -850,6 +850,15 @@
     "fieldBackground": "后台运行",
     "backgroundHint": "启动存活后步骤即完成,进程常驻后台(如 RTT Server)",
     "backgroundCount": "后台 {count} · 停止",
-    "backgroundStopped": "已停止 {count} 个后台进程"
+    "backgroundStopped": "已停止 {count} 个后台进程",
+    "groupUngrouped": "未分组",
+    "reorderHint": "拖拽调整组内顺序",
+    "runMode": "任务运行触发方式",
+    "runSingle": "单击运行",
+    "runDouble": "双击运行",
+    "runButton": "仅运行按钮",
+    "copyTask": "复制任务",
+    "copySuffix": " 副本",
+    "tabDropHint": "点击切换组;拖入任务移到本组末尾"
   }
 }

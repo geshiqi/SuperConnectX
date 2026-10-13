@@ -167,6 +167,8 @@ import type { UserTask, TaskStep, TaskShellStep, TaskBuiltinStep } from '../../.
 const props = defineProps<{
   modelValue: boolean
   task: UserTask | null
+  /** 新建任务时预填的分组(通常为面板当前选中组) */
+  defaultGroup?: string
 }>()
 
 const emit = defineEmits<{
@@ -209,7 +211,7 @@ watch(
     const source = props.task
     draft.id = source?.id ?? ''
     draft.name = source?.name ?? ''
-    draft.group = source?.group ?? ''
+    draft.group = source?.group ?? props.defaultGroup ?? ''
     draft.repeat = source?.repeat ?? 1
     draft.steps = (source?.steps ?? []).map((step) => {
       if (step.type === 'builtin') {

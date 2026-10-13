@@ -180,6 +180,7 @@ declare global {
       list: () => Promise<import('../shared/tasks/UserTask').UserTask[]>
       save: (task: import('../shared/tasks/UserTask').UserTask) => Promise<{ success: boolean; tasks?: import('../shared/tasks/UserTask').UserTask[]; message?: string }>
       delete: (id: string) => Promise<{ success: boolean; tasks: import('../shared/tasks/UserTask').UserTask[] }>
+      reorder: (ids: string[], groups: Record<string, string>) => Promise<{ success: boolean; tasks?: import('../shared/tasks/UserTask').UserTask[]; message?: string }>
       run: (taskId: string, options?: { external?: boolean }) => Promise<{ success: boolean; runId?: string; message?: string }>
       stop: () => Promise<{ success: boolean }>
       isRunning: () => Promise<boolean>

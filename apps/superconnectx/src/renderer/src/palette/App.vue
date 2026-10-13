@@ -30,25 +30,61 @@
       >
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
+      <el-dropdown trigger="click" @command="setRunMode">
+        <el-button text size="default" class="run-mode-btn" :title="t('palette.runMode')">
+          <el-icon><Setting /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="single" :icon="runMode === 'single' ? Check : undefined">{{ t('palette.runSingle') }}</el-dropdown-item>
+            <el-dropdown-item command="double" :icon="runMode === 'double' ? Check : undefined">{{ t('palette.runDouble') }}</el-dropdown-item>
+            <el-dropdown-item command="button" :icon="runMode === 'button' ? Check : undefined">{{ t('palette.runButton') }}</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-button type="primary" size="default" @click="openEditor(null)">
         <el-icon style="margin-right: 4px"><Plus /></el-icon>{{ t('palette.newTask') }}
       </el-button>
     </div>
 
-    <!-- 任务列表 -->
+    <!-- 任务列表:顶部组标签切换,组内拖拽排序;搜索时跨组显示匹配 -->
     <div class="task-list" ref="taskListRef">
-      <div v-if="filteredTasks.length === 0" class="empty-hint">{{ t('palette.noTasks') }}</div>
+      <div class="group-tabs">
+        <div
+          v-for="group in taskGroups"
+          :key="group.name"
+          class="group-tab"
+          :class="{ active: activeGroup === group.name }"
+          :title="t('palette.tabDropHint')"
+          @click="activeGroup = group.name"
+          @dragover.prevent="onTabDragOver($event)"
+          @dragleave="onTabDragLeave($event)"
+          @drop.stop.prevent="onDropOnTab(group, $event)"
+        >
+          <span class="tab-name">{{ group.name || t('palette.groupUngrouped') }}</span>
+          <span class="tab-count">{{ group.tasks.length }}</span>
+        </div>
+      </div>
+      <div v-if="currentTasks.length === 0" class="empty-hint">{{ t('palette.noTasks') }}</div>
       <div
-        v-for="(task, i) in filteredTasks"
+        v-for="(task, i) in currentTasks"
         :key="task.id"
         class="task-item"
         :class="{ active: i === selectedIndex }"
+        :draggable="isDragEnabled"
+        :title="isDragEnabled ? t('palette.reorderHint') : ''"
+        @dragstart="onDragStart(task, $event)"
+        @dragover.prevent="onDragOver($event)"
+        @dragleave="onDragLeave($event)"
+        @drop.stop="onDropBefore(task, $event)"
+        @dragend="dragTaskId = null"
         @mouseenter="selectedIndex = i"
-        @click="runTask(task)"
+        @click="onTaskClick(task)"
+        @dblclick="onTaskDblClick(task)"
       >
         <div class="task-main">
           <span class="task-name">{{ task.name }}</span>
-          <el-tag v-if="task.group" size="small" type="info">{{ task.group }}</el-tag>
+          <el-tag v-if="keyword && task.group" size="small" type="info">{{ task.group }}</el-tag>
           <span class="task-meta">{{ task.steps.length }} {{ t('palette.stepsUnit') }}<template v-if="(task.repeat || 1) > 1"> × {{ task.repeat }}</template></span>
         </div>
         <div class="task-actions" @click.stop>
@@ -64,6 +100,9 @@
             @click="runTask(task, true)"
           >
             <el-icon><Monitor /></el-icon>
+          </el-button>
+          <el-button size="small" text :title="t('palette.copyTask')" @click="duplicateTask(task)">
+            <el-icon><CopyDocument /></el-icon>
           </el-button>
           <el-button size="small" text @click="openEditor(task)">
             <el-icon><Edit /></el-icon>
@@ -119,7 +158,7 @@
     </div>
 
     <!-- 任务编辑对话框 -->
-    <TaskEditor v-model="editorVisible" :task="editingTask" @saved="onTaskSaved" />
+    <TaskEditor v-model="editorVisible" :task="editingTask" :default-group="editorDefaultGroup" @saved="onTaskSaved" />
   </div>
 </template>
 
@@ -128,6 +167,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import { useTheme } from '@superx/foundation/theme/useTheme'
+import { Check } from '@element-plus/icons-vue'
 import type { UserTask, TaskRunEvent } from '../../../shared/tasks/UserTask'
 import TaskEditor from './TaskEditor.vue'
 
@@ -166,6 +206,154 @@ const filteredTasks = computed(() => {
       (task.group || '').toLowerCase().includes(key)
   )
 })
+
+// ===== 组标签:按任务数组顺序首次出现分组;搜索时跨组显示匹配 =====
+const activeGroup = ref<string>('')
+
+const taskGroups = computed<Array<{ name: string; tasks: UserTask[] }>>(() => {
+  const groups: Array<{ name: string; tasks: UserTask[] }> = []
+  const byName = new Map<string, { name: string; tasks: UserTask[] }>()
+  for (const task of tasks.value) {
+    const name = task.group || ''
+    let group = byName.get(name)
+    if (!group) {
+      group = { name, tasks: [] }
+      byName.set(name, group)
+      groups.push(group)
+    }
+    group.tasks.push(task)
+  }
+  return groups
+})
+
+// 当前展示的任务:搜索时跨组显示匹配,否则显示选中组的任务
+const currentTasks = computed<UserTask[]>(() => {
+  const key = keyword.value.trim().toLowerCase()
+  if (key) return filteredTasks.value
+  return taskGroups.value.find((group) => group.name === activeGroup.value)?.tasks ?? []
+})
+
+// 选中组失效(组内任务清空/改组)时回退到第一个组
+watch(taskGroups, (groups) => {
+  if (!groups.some((group) => group.name === activeGroup.value)) {
+    activeGroup.value = groups[0]?.name ?? ''
+  }
+}, { immediate: true })
+
+// ===== 运行触发模式:单击 / 双击 / 仅按钮(防误触),Enter 始终可运行 =====
+type RunMode = 'single' | 'double' | 'button'
+const RUN_MODE_KEY = 'palette-run-mode'
+const runMode = ref<RunMode>('double')
+try {
+  const saved = localStorage.getItem(RUN_MODE_KEY)
+  if (saved === 'single' || saved === 'double' || saved === 'button') runMode.value = saved
+} catch { /* ignore */ }
+
+const setRunMode = (mode: string | number | object): void => {
+  const next = String(mode) as RunMode
+  if (next !== 'single' && next !== 'double' && next !== 'button') return
+  runMode.value = next
+  try {
+    localStorage.setItem(RUN_MODE_KEY, next)
+  } catch { /* ignore */ }
+}
+
+const onTaskClick = (task: UserTask): void => {
+  if (runMode.value === 'single') runTask(task)
+}
+
+const onTaskDblClick = (task: UserTask): void => {
+  if (runMode.value === 'double') runTask(task)
+}
+
+// ===== 组内拖拽排序:搜索态禁用 =====
+const isDragEnabled = computed(() => !keyword.value.trim())
+const dragTaskId = ref<string | null>(null)
+
+const onDragStart = (task: UserTask, event: DragEvent): void => {
+  dragTaskId.value = task.id
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', task.id)
+  }
+}
+
+const onDragOver = (event: DragEvent): void => {
+  if (!dragTaskId.value) return
+  ;(event.currentTarget as HTMLElement).classList.add('drop-hover')
+}
+
+const onDragLeave = (event: DragEvent): void => {
+  ;(event.currentTarget as HTMLElement).classList.remove('drop-hover')
+}
+
+const onTabDragOver = (event: DragEvent): void => {
+  if (!dragTaskId.value) return
+  ;(event.currentTarget as HTMLElement).classList.add('drop-hover')
+}
+
+const onTabDragLeave = (event: DragEvent): void => {
+  ;(event.currentTarget as HTMLElement).classList.remove('drop-hover')
+}
+
+/** 拖到组标签释放:任务改归该组并置于组末尾 */
+const onDropOnTab = (group: { name: string }, event: DragEvent): void => {
+  ;(event.currentTarget as HTMLElement).classList.remove('drop-hover')
+  const dragId = dragTaskId.value
+  dragTaskId.value = null
+  if (!dragId) return
+  const list = [...tasks.value]
+  const from = list.findIndex((task) => task.id === dragId)
+  if (from < 0) return
+  const [moved] = list.splice(from, 1)
+  const target = group.name
+  moved.group = target ? target : undefined
+  let insertAt = list.length
+  for (let i = list.length - 1; i >= 0; i--) {
+    if ((list[i].group || '') === target) {
+      insertAt = i + 1
+      break
+    }
+  }
+  list.splice(insertAt, 0, moved)
+  tasks.value = list
+  void persistReorder()
+}
+
+/** 组内重排:把拖动任务移到目标任务之前,写回该组在数组中占用的索引位(支持与其他组交错存储) */
+const onDropBefore = (target: UserTask, event: DragEvent): void => {
+  event.preventDefault()
+  ;(event.currentTarget as HTMLElement).classList.remove('drop-hover')
+  const dragId = dragTaskId.value
+  if (!dragId || dragId === target.id) return
+  const groupName = activeGroup.value
+  const groupTasks = tasks.value.filter((task) => (task.group || '') === groupName)
+  const from = groupTasks.findIndex((task) => task.id === dragId)
+  if (from < 0) return
+  const [moved] = groupTasks.splice(from, 1)
+  const insertAt = groupTasks.findIndex((task) => task.id === target.id)
+  if (insertAt < 0) return
+  groupTasks.splice(insertAt, 0, moved)
+
+  const list = [...tasks.value]
+  const positions: number[] = []
+  list.forEach((task, index) => {
+    if ((task.group || '') === groupName) positions.push(index)
+  })
+  positions.forEach((position, k) => {
+    list[position] = groupTasks[k]
+  })
+  tasks.value = list
+  void persistReorder()
+}
+
+const persistReorder = async (): Promise<void> => {
+  const ids = tasks.value.map((task) => task.id)
+  const groups: Record<string, string> = {}
+  for (const task of tasks.value) groups[task.id] = task.group || ''
+  const result = await window.taskApi.reorder(ids, groups)
+  if (result.tasks) tasks.value = result.tasks
+}
 
 const ANSI_STRIP = /\u001b\[[0-9;]*[A-Za-z]/g
 
@@ -246,12 +434,12 @@ const runTask = async (task: UserTask, external = false): Promise<void> => {
 }
 
 const runSelected = (): void => {
-  const task = filteredTasks.value[selectedIndex.value]
+  const task = currentTasks.value[selectedIndex.value]
   if (task) runTask(task)
 }
 
 const moveSelection = (delta: number): void => {
-  const total = filteredTasks.value.length
+  const total = currentTasks.value.length
   if (total === 0) return
   selectedIndex.value = (selectedIndex.value + delta + total) % total
 }
@@ -289,6 +477,23 @@ const clearOutput = (): void => {
   lastRunStatus.value = null
 }
 
+/** 复制任务:深拷贝步骤,同组生成副本 */
+const duplicateTask = async (task: UserTask): Promise<void> => {
+  const copy: UserTask = {
+    ...task,
+    id: '',
+    name: `${task.name}${t('palette.copySuffix')}`,
+    steps: JSON.parse(JSON.stringify(task.steps)) as UserTask['steps']
+  }
+  const result = await window.taskApi.save(copy)
+  if (result.success && result.tasks) {
+    tasks.value = result.tasks
+    appendOutput(`${t('palette.copyTask')}: ${copy.name}`, 'info')
+  } else if (result.message) {
+    appendOutput(result.message, 'stderr')
+  }
+}
+
 const removeTask = async (task: UserTask): Promise<void> => {
   try {
     await ElMessageBox.confirm(t('palette.deleteConfirm', { name: task.name }), t('palette.deleteTitle'), {
@@ -301,8 +506,10 @@ const removeTask = async (task: UserTask): Promise<void> => {
   if (result.tasks) tasks.value = result.tasks
 }
 
+const editorDefaultGroup = ref('')
 const openEditor = (task: UserTask | null): void => {
   editingTask.value = task
+  editorDefaultGroup.value = task ? task.group || '' : activeGroup.value
   editorVisible.value = true
 }
 
@@ -377,8 +584,8 @@ const resetOutputHeight = (): void => {
   } catch { /* ignore */ }
 }
 
-watch(filteredTasks, () => {
-  if (selectedIndex.value >= filteredTasks.value.length) selectedIndex.value = 0
+watch(currentTasks, () => {
+  if (selectedIndex.value >= currentTasks.value.length) selectedIndex.value = 0
 })
 
 onMounted(async () => {
@@ -504,13 +711,78 @@ onUnmounted(() => {
   padding: 24px 0;
 }
 
+.run-mode-btn {
+  color: var(--text-secondary, #888);
+  padding: 6px;
+}
+
+.run-mode-btn:hover {
+  color: var(--focus-border-color, #409eff);
+  background: var(--overlay-hover, #37373d);
+}
+
+.group-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0 6px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.group-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  color: var(--text-secondary, #888);
+  background: var(--bg-titlebar, #2d2d30);
+  font-size: 12px;
+}
+
+.group-tab:hover {
+  background: var(--overlay-hover, #37373d);
+}
+
+.group-tab.active {
+  background: var(--focus-border-color, #409eff);
+  color: #fff;
+}
+
+.group-tab .tab-count {
+  background: rgba(127, 127, 127, 0.35);
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.group-tab.drop-hover {
+  box-shadow: inset 0 -2px 0 0 var(--focus-border-color, #409eff);
+  color: var(--focus-border-color, #409eff);
+}
+
+.group-tab.active .tab-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 .task-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 6px 8px;
   border-radius: 6px;
-  cursor: pointer;
+  cursor: grab;
+}
+
+.task-item:active {
+  cursor: grabbing;
+}
+
+.task-item.drop-hover {
+  box-shadow: inset 0 2px 0 0 var(--focus-border-color, #409eff);
 }
 
 .task-item:hover,

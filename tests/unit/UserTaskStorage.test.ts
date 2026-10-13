@@ -44,6 +44,41 @@ describe('UserTaskStorage', () => {
     expect(tasks[0].name).toBe('Untitled')
   })
 
+  it('reorderTasks 按给定顺序重排并应用组更新', () => {
+    const byName = (name: string) => {
+      const task = storage.getTasks().find((item) => item.name === name)
+      if (!task) throw new Error(`missing ${name}`)
+      return task
+    }
+    storage.saveTask(makeTask({ name: 'A' }))
+    storage.saveTask(makeTask({ name: 'B' }))
+    storage.saveTask(makeTask({ name: 'C' }))
+    const a = byName('A')
+    const b = byName('B')
+    const c = byName('C')
+    // B 挪到最前并归入新组,C 改为无组
+    const tasks = storage.reorderTasks([b.id, a.id, c.id], { [b.id]: 'JLink', [c.id]: '' })
+    expect(tasks.map((task) => task.name)).toEqual(['B', 'A', 'C'])
+    expect(tasks[0].group).toBe('JLink')
+    expect(tasks[1].group).toBeUndefined()
+    expect(tasks[2].group).toBeUndefined()
+    expect(storage.getTasks().map((task) => task.name)).toEqual(['B', 'A', 'C'])
+  })
+
+  it('reorderTasks 未列出的任务保持相对顺序缀尾', () => {
+    const byName = (name: string) => {
+      const task = storage.getTasks().find((item) => item.name === name)
+      if (!task) throw new Error(`missing ${name}`)
+      return task
+    }
+    storage.saveTask(makeTask({ name: 'A' }))
+    storage.saveTask(makeTask({ name: 'B' }))
+    storage.saveTask(makeTask({ name: 'C' }))
+    const c = byName('C')
+    const tasks = storage.reorderTasks([c.id], {})
+    expect(tasks.map((task) => task.name)).toEqual(['C', 'A', 'B'])
+  })
+
   it('删除任务', () => {
     let tasks = storage.saveTask(makeTask())
     const id = tasks[0].id

@@ -63,6 +63,27 @@ export default class UserTaskStorage {
     return tasks
   }
 
+  /** 按给定 id 顺序重排任务,并应用组更新(未列出的任务保持相对顺序缀在末尾) */
+  reorderTasks(ids: string[], groups: Record<string, string>): UserTask[] {
+    const tasks = this.getTasks()
+    const byId = new Map(tasks.map((task) => [task.id, task]))
+    const ordered: UserTask[] = []
+    const seen = new Set<string>()
+    for (const id of ids) {
+      const task = byId.get(id)
+      if (!task || seen.has(id)) continue
+      seen.add(id)
+      const group = groups[id]
+      task.group = group && group.trim() ? group.trim() : undefined
+      ordered.push(task)
+    }
+    for (const task of tasks) {
+      if (!seen.has(task.id)) ordered.push(task)
+    }
+    this.storageData.set('tasks', ordered)
+    return ordered
+  }
+
   deleteTask(id: string): UserTask[] {
     const tasks = this.getTasks().filter((task) => task.id !== id)
     this.storageData.set('tasks', tasks)

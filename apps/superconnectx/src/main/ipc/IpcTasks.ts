@@ -46,6 +46,12 @@ export default class IpcTasks {
       return { success: true, tasks }
     })
 
+    ipcMain.handle('tasks:reorder', (_, { ids, groups }: { ids: string[]; groups: Record<string, string> }) => {
+      if (!Array.isArray(ids)) return { success: false, message: 'invalid ids' }
+      const tasks = this.storage.reorderTasks(ids, groups || {})
+      return { success: true, tasks }
+    })
+
     ipcMain.handle('task:delete', (_, id: string) => {
       const tasks = this.storage.deleteTask(id)
       return { success: true, tasks }

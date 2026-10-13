@@ -204,6 +204,8 @@ contextBridge.exposeInMainWorld('taskApi', {
   list: (): Promise<import('../shared/tasks/UserTask').UserTask[]> => ipcRenderer.invoke('task:list'),
   save: (task: import('../shared/tasks/UserTask').UserTask): Promise<{ success: boolean; tasks?: import('../shared/tasks/UserTask').UserTask[]; message?: string }> => ipcRenderer.invoke('task:save', task),
   delete: (id: string): Promise<{ success: boolean; tasks: import('../shared/tasks/UserTask').UserTask[] }> => ipcRenderer.invoke('task:delete', id),
+  reorder: (ids: string[], groups: Record<string, string>): Promise<{ success: boolean; tasks?: import('../shared/tasks/UserTask').UserTask[]; message?: string }> =>
+    ipcRenderer.invoke('tasks:reorder', { ids, groups }),
   run: (taskId: string, options?: { external?: boolean }): Promise<{ success: boolean; runId?: string; message?: string }> =>
     ipcRenderer.invoke('task:run', { taskId, external: options?.external }),
   stop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('task:stop'),

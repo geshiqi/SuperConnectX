@@ -850,6 +850,15 @@
     "fieldBackground": "Background",
     "backgroundHint": "Step completes once started; process stays alive (e.g. RTT Server)",
     "backgroundCount": "Background {count} · stop",
-    "backgroundStopped": "Stopped {count} background process(es)"
+    "backgroundStopped": "Stopped {count} background process(es)",
+    "groupUngrouped": "Ungrouped",
+    "reorderHint": "Drag to reorder within group",
+    "runMode": "Run trigger mode",
+    "runSingle": "Single click",
+    "runDouble": "Double click",
+    "runButton": "Run button only",
+    "copyTask": "Duplicate task",
+    "copySuffix": " copy",
+    "tabDropHint": "Click to switch; drop a task here to move it into this group"
   }
 }
