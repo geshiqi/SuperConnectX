@@ -170,6 +170,9 @@ export default class IpcTasks {
       win.loadFile(join(__dirname, '../../out/renderer/palette.html'))
     }
 
+    // 默认最大化打开;还原尺寸仍取记忆的 bounds(saveBounds 已跳过最大化状态)
+    win.maximize()
+
     win.once('ready-to-show', () => {
       win.show()
       win.focus()

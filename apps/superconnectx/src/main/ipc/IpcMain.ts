@@ -86,6 +86,9 @@ export default class IpcMain {
         ...getWindowFrameOptions(process.platform)
       })
 
+      // 启动默认最大化(用户可还原,窗口尺寸仍以 1200x800 为还原基准)
+      mainWindow.maximize()
+
       // 加载界面（开发环境加载 Vite 服务，生产环境加载本地 HTML）
       if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
         mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
