@@ -570,6 +570,13 @@ const closeWindow = (): void => {
 // ===== 极简模式:置顶小条(组下拉 + 任务运行按钮);runningTaskName 复用输出区已有状态 =====
 const minimalMode = ref(false)
 
+// 模式切换输出容器重新挂载会复位滚动位置,切回时滚到底部(最新输出才是有效信息)
+watch(minimalMode, async () => {
+  await nextTick()
+  const el = outputBodyRef.value
+  if (el) el.scrollTop = el.scrollHeight
+})
+
 const toggleMinimal = async (): Promise<void> => {
   const next = !minimalMode.value
   minimalMode.value = next
@@ -583,7 +590,8 @@ const toggleMinimal = async (): Promise<void> => {
     if (bar) {
       const prev = bar.style.width
       bar.style.width = 'max-content'
-      width = Math.min(Math.ceil(bar.offsetWidth) + 6, Math.max(window.screen.availWidth - 40, 300))
+      // +28 预留运行状态图标(✓/✗/⟳)宽度:测量时该图标尚未渲染,不预留会导致运行结束后按钮被挤压
+      width = Math.min(Math.ceil(bar.offsetWidth) + 6 + 28, Math.max(window.screen.availWidth - 40, 300))
       bar.style.width = prev
     }
     await window.paletteApi?.setMinimal?.(true, width)
