@@ -25,6 +25,9 @@ export default class IpcTasks {
   private activeSessionId: string | null = null
   private currentRunId: string | null = null
   private currentTheme: 'dark' | 'light' = 'dark'
+  private paletteMinimal = false
+  private palettePreMinimalBounds: Electron.Rectangle | null = null
+  private palettePreMinimalMaximized = false
 
   static getInstance(): IpcTasks {
     if (IpcTasks.sInstance == null) {
@@ -131,6 +134,37 @@ export default class IpcTasks {
     })
     ipcMain.handle('palette:get-theme', () => this.currentTheme)
 
+    // 极简模式:收缩为置顶小条(默认与最小尺寸 = 命令条内容宽 + 两行输出高),退出恢复原样
+    ipcMain.handle('palette:set-minimal', (_, minimal: boolean, contentWidth?: number) => {
+      const win = this.paletteWindow
+      if (!win || win.isDestroyed()) return { success: false }
+      this.paletteMinimal = minimal === true
+      if (this.paletteMinimal) {
+        // 先取消最大化:setBounds 对最大化窗口不生效,会导致小条悬浮在满屏窗口中央
+        this.palettePreMinimalMaximized = win.isMaximized()
+        if (this.palettePreMinimalMaximized) win.unmaximize()
+        this.palettePreMinimalBounds = win.getNormalBounds()
+        // 宽度取渲染层实测的命令条内容宽;高度 = 36 命令条 + 两行输出
+        const measured = Number(contentWidth)
+        const width = Number.isFinite(measured) && measured > 0 ? Math.ceil(measured) : this.palettePreMinimalBounds.width
+        const MINIMAL_BAR_HEIGHT = 36
+        const MINIMAL_OUTPUT_LINES = 2
+        const height = MINIMAL_BAR_HEIGHT + MINIMAL_OUTPUT_LINES * 19 + 4
+        // 窗口创建时的 minHeight 320 会钳制 setBounds,先放开最小尺寸;极简下仍可拖边缘调整大小
+        win.setMinimumSize(width, height)
+        win.setBounds({ x: this.palettePreMinimalBounds.x, y: this.palettePreMinimalBounds.y, width, height })
+        win.setAlwaysOnTop(true)
+      } else {
+        win.setAlwaysOnTop(false)
+        if (this.palettePreMinimalBounds) {
+          win.setBounds(this.palettePreMinimalBounds)
+        }
+        if (this.palettePreMinimalMaximized) win.maximize()
+        win.setMinimumSize(PALETTE_MIN_SIZE.width, PALETTE_MIN_SIZE.height)
+      }
+      return { success: true }
+    })
+
     // 应用退出前停掉运行中的任务与后台常驻进程(否则孤儿进程会继续占用 J-Link 等)
     app.on('before-quit', () => {
       this.runner.stop()
@@ -207,7 +241,7 @@ export default class IpcTasks {
     // 窗口状态记忆:防抖保存,close 时立即保存(最大化时记录还原基准 bounds + 标志)
     let saveStateTimer: NodeJS.Timeout | null = null
     const persistWindowState = (): void => {
-      if (win.isDestroyed() || win.isMinimized()) return
+      if (win.isDestroyed() || win.isMinimized() || this.paletteMinimal) return
       const normal = win.getNormalBounds()
       this.windowState.saveWindowState('palette', {
         x: normal.x,

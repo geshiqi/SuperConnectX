@@ -1,9 +1,12 @@
 <template>
   <div class="palette">
-    <!-- 标题栏:拖拽区 + 窗口控件 -->
-    <div class="palette-titlebar" @dblclick="toggleMaximize">
+    <!-- 标题栏:拖拽区 + 窗口控件(极简模式下隐藏,命令条兼任拖拽区) -->
+    <div v-if="!minimalMode" class="palette-titlebar" @dblclick="toggleMaximize">
       <div class="title-text">{{ t('palette.title') }}</div>
       <div class="titlebar-controls">
+        <button class="win-btn" :title="t('palette.enterMinimal')" @click="toggleMinimal">
+          <el-icon :size="12"><Fold /></el-icon>
+        </button>
         <button class="win-btn" :title="t('palette.minimize')" @click="minimizeWindow">
           <el-icon :size="12"><Minus /></el-icon>
         </button>
@@ -16,6 +19,46 @@
       </div>
     </div>
 
+    <!-- 极简模式:组下拉 + 当前组任务运行按钮 + 状态 -->
+    <div v-if="minimalMode" class="minimal-bar">
+      <el-select v-model="activeGroup" size="small" class="minimal-group">
+        <el-option v-for="group in taskGroups" :key="group.name" :label="`${group.name || t('palette.groupUngrouped')} (${group.tasks.length})`" :value="group.name" />
+      </el-select>
+      <div class="minimal-tasks">
+        <el-button
+          v-for="task in minimalGroupTasks"
+          :key="task.id"
+          size="small"
+          class="minimal-task-btn"
+          :type="isRunning && runningTaskName === task.name ? 'primary' : 'default'"
+          :disabled="isRunning && runningTaskName !== task.name"
+          @click="runTask(task)"
+        >
+          <el-icon v-if="isRunning && runningTaskName === task.name" class="spin"><Loading /></el-icon>
+          <el-icon v-else><CaretRight /></el-icon>
+          {{ task.name }}
+        </el-button>
+        <span v-if="minimalGroupTasks.length === 0" class="minimal-empty">{{ t('palette.minimalNoTasks') }}</span>
+      </div>
+      <span v-if="isRunning" class="minimal-status run"><el-icon class="spin"><Loading /></el-icon></span>
+      <span v-else-if="lastRunStatus" class="minimal-status" :class="lastRunStatus.success ? 'ok' : 'fail'">{{ lastRunStatus.success ? '✓' : '✗' }}</span>
+      <span class="minimal-controls">
+        <button class="win-btn" :title="t('palette.exitMinimal')" @click="toggleMinimal">
+          <el-icon :size="12"><Expand /></el-icon>
+        </button>
+        <button class="win-btn close-btn" :title="t('palette.close')" @click="closeWindow">
+          <el-icon :size="12"><Close /></el-icon>
+        </button>
+      </span>
+    </div>
+
+    <!-- 极简输出区:限高滚动,只保留最近输出 -->
+    <div v-if="minimalMode" class="minimal-output" ref="outputBodyRef">
+      <div v-for="(line, i) in minimalOutputLines" :key="i" class="output-line" :class="line.kind">{{ line.text }}</div>
+    </div>
+
+    <!-- 完整模式 -->
+    <template v-else>
     <!-- 搜索框 -->
     <div class="search-row">
       <el-input
@@ -157,7 +200,9 @@
       </div>
     </div>
 
-    <!-- 任务编辑对话框 -->
+    </template>
+
+    <!-- 任务编辑对话框(两种模式共用) -->
     <TaskEditor v-model="editorVisible" :task="editingTask" :default-group="editorDefaultGroup" @saved="onTaskSaved" />
   </div>
 </template>
@@ -405,6 +450,7 @@ const handleEvent = (event: TaskRunEvent): void => {
     }
     case 'run-end':
       isRunning.value = false
+      runningTaskName.value = ''
       currentStepLabel.value = ''
       lastRunStatus.value = {
         success: event.success,
@@ -520,6 +566,37 @@ const onTaskSaved = (updated: UserTask[]): void => {
 const closeWindow = (): void => {
   window.close()
 }
+
+// ===== 极简模式:置顶小条(组下拉 + 任务运行按钮);runningTaskName 复用输出区已有状态 =====
+const minimalMode = ref(false)
+
+const toggleMinimal = async (): Promise<void> => {
+  const next = !minimalMode.value
+  minimalMode.value = next
+  if (next) {
+    keyword.value = ''
+    // 等命令条渲染完成后实测内容自然宽度:bar 是块级容器会被拉伸到窗口宽,
+    // scrollWidth 下限即自身宽度(等于旧面板宽),须临时 width:max-content 取内容宽
+    await nextTick()
+    const bar = document.querySelector('.minimal-bar') as HTMLElement | null
+    let width: number | undefined
+    if (bar) {
+      const prev = bar.style.width
+      bar.style.width = 'max-content'
+      width = Math.min(Math.ceil(bar.offsetWidth) + 6, Math.max(window.screen.availWidth - 40, 300))
+      bar.style.width = prev
+    }
+    await window.paletteApi?.setMinimal?.(true, width)
+  } else {
+    await window.paletteApi?.setMinimal?.(false)
+  }
+}
+
+const minimalGroupTasks = computed<UserTask[]>(() =>
+  taskGroups.value.find((group) => group.name === activeGroup.value)?.tasks ?? []
+)
+
+const minimalOutputLines = computed<OutputLine[]>(() => outputLines.value.slice(-200))
 
 // ===== 窗口控件:最小化/最大化还原/关闭 =====
 const isMaximized = ref(false)
@@ -720,6 +797,84 @@ onUnmounted(() => {
   color: var(--focus-border-color, #409eff);
   background: var(--overlay-hover, #37373d);
 }
+
+.minimal-bar {
+  flex: none;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 8px;
+  overflow: hidden;
+  -webkit-app-region: drag;
+  background: var(--bg-titlebar, #2d2d30);
+  flex-shrink: 0;
+}
+
+/* 命令条本身是窗口拖拽区,交互元素排除 */
+.minimal-bar :deep(.el-select),
+.minimal-bar :deep(.el-button),
+.minimal-status,
+.minimal-controls {
+  -webkit-app-region: no-drag;
+}
+
+.minimal-bar :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.minimal-bar :deep(.el-button) {
+  padding: 4px 8px;
+}
+
+.minimal-controls {
+  display: flex;
+  margin-left: auto;
+}
+
+.minimal-group {
+  width: 150px;
+  flex-shrink: 0;
+}
+
+.minimal-tasks {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.minimal-task-btn {
+  flex-shrink: 0;
+}
+
+.minimal-empty {
+  color: var(--text-secondary, #888);
+  font-size: 12px;
+}
+
+.minimal-status {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.minimal-output {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 10px;
+  border-top: 1px solid var(--border-secondary, #404040);
+  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.minimal-status.ok { color: #4caf50; }
+.minimal-status.fail { color: #f44336; }
+.minimal-status.run { color: var(--focus-border-color, #409eff); }
 
 .group-tabs {
   display: flex;

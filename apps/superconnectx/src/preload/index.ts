@@ -231,6 +231,8 @@ contextBridge.exposeInMainWorld('paletteApi', {
   toggleMaximize: (): Promise<{ success: boolean; maximized?: boolean }> => ipcRenderer.invoke('palette:toggle-maximize'),
   close: (): Promise<{ success: boolean }> => ipcRenderer.invoke('palette:close'),
   isMaximized: (): Promise<boolean> => ipcRenderer.invoke('palette:is-maximized'),
+  setMinimal: (minimal: boolean, contentWidth?: number): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('palette:set-minimal', minimal, contentWidth),
   notifyTheme: (theme: string): void => {
     ipcRenderer.send('palette:set-theme', theme)
   },

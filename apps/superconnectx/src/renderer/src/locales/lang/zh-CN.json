@@ -859,6 +859,9 @@
     "runButton": "仅运行按钮",
     "copyTask": "复制任务",
     "copySuffix": " 副本",
-    "tabDropHint": "点击切换组;拖入任务移到本组末尾"
+    "tabDropHint": "点击切换组;拖入任务移到本组末尾",
+    "enterMinimal": "极简模式(置顶小条)",
+    "exitMinimal": "退出极简模式",
+    "minimalNoTasks": "当前组无任务"
   }
 }

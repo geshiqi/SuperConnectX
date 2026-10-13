@@ -859,6 +859,9 @@
     "runButton": "Run button only",
     "copyTask": "Duplicate task",
     "copySuffix": " copy",
-    "tabDropHint": "Click to switch; drop a task here to move it into this group"
+    "tabDropHint": "Click to switch; drop a task here to move it into this group",
+    "enterMinimal": "Minimal mode (top bar)",
+    "exitMinimal": "Exit minimal mode",
+    "minimalNoTasks": "No tasks in this group"
   }
 }
