@@ -85,7 +85,7 @@ afterPack: ./scripts/afterPack.js
 npmRebuild: false
 publish:
   provider: github
-  owner: SuperStudio
+  owner: geshiqi
   repo: SuperConnectX
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
