@@ -75,6 +75,49 @@ describe('TelnetClient Integration', () => {
     client = new TelnetClient()
   })
 
+  describe('send payload semantics', () => {
+    it('文本发送不再强制追加换行,CRLF 由渲染层决定', async () => {
+      await client.start(
+        { host: '127.0.0.1', port: 23, username: '', password: '', sessionId: 's1' },
+        vi.fn(), vi.fn(), vi.fn()
+      )
+      const conn = (client as any).telnetConnections.get('s1')
+      const payloads: Buffer[] = []
+      const originalSend = conn.send.bind(conn)
+      conn.send = async (payload: Buffer) => {
+        payloads.push(payload)
+        return originalSend(payload)
+      }
+
+      const r = await client.send('s1', 'AT', vi.fn())
+      expect(r.success).toBe(true)
+      expect(payloads).toHaveLength(1)
+      expect(payloads[0].toString('utf8')).toBe('AT') // 不带 
+
+    })
+
+    it('HEX 二进制字符串按原始字节透传,高字节不被 utf8 重编码', async () => {
+      await client.start(
+        { host: '127.0.0.1', port: 23, username: '', password: '', sessionId: 's2' },
+        vi.fn(), vi.fn(), vi.fn()
+      )
+      const conn = (client as any).telnetConnections.get('s2')
+      const payloads: Buffer[] = []
+      const originalSend = conn.send.bind(conn)
+      conn.send = async (payload: Buffer) => {
+        payloads.push(payload)
+        return originalSend(payload)
+      }
+
+      // charCode 0xAA(HEX 模式解析结果),旧实现会被 utf8 编码成 C2 AA
+      const binary = 'A' + String.fromCharCode(0xaa, 0x0d, 0x0a)
+      const r = await client.send('s2', binary, vi.fn())
+      expect(r.success).toBe(true)
+      expect(payloads).toHaveLength(1)
+      expect(Array.from(payloads[0])).toEqual([0x41, 0xaa, 0x0d, 0x0a])
+    })
+  })
+
   describe('connection lifecycle', () => {
     it('should handle full connect-send-disconnect cycle', async () => {
       const onData = vi.fn()

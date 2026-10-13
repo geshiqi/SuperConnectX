@@ -148,6 +148,17 @@ export default class TelnetClient extends BaseClient {
     }
   }
 
+  /** HEX 模式下 command 是二进制字符串(charCode 0-255),需与文本发送区分处理 */
+  private isBinaryString(str: string): boolean {
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i)
+      if (code >= 0x80 && code <= 0xff) {
+        return true
+      }
+    }
+    return false
+  }
+
   async send(connId: string, command: string, onComplete: any): Promise<object> {
     const connection = this.telnetConnections.get(connId)
     if (!connection) {
@@ -155,12 +166,20 @@ export default class TelnetClient extends BaseClient {
     }
 
     try {
-      const dataStr = `[${BufferLineSplitter.timestamp()}] SEND >>>>>>>>>> ${command}`
+      // 二进制数据日志转 hex 显示;换行(CRLF)由渲染层按开关统一追加,后端不再强制补 \n
+      const isBinary = this.isBinaryString(command)
+      const logCommand = isBinary
+        ? Array.from({ length: command.length }, (_, i) => command.charCodeAt(i).toString(16).padStart(2, '0')).join(' ').toUpperCase()
+        : command
+      const dataStr = `[${BufferLineSplitter.timestamp()}] SEND >>>>>>>>>> ${logCommand}`
+
       const encoding = this.connectionInfos.get(connId)?.encoding || 'utf8'
-      await connection.send(iconv.encode(command + '\n', encoding))
+      // 二进制逐字节写入(latin1 1:1 映射 charCode),绕过文本编码避免高字节被 utf8 重编码损坏
+      const payload: Buffer = isBinary ? Buffer.from(command, 'latin1') : iconv.encode(command, encoding)
+      await connection.send(payload)
       onComplete?.(dataStr)
 
-      this.logger.info(`send command: ${command}`)
+      this.logger.info(`send command: ${logCommand}`)
       return { success: true }
     } catch (error) {
       this.logger.error('telnet send failed', { connId, command, error })

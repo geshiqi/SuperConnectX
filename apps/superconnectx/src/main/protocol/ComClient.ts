@@ -273,7 +273,7 @@ export default class ComClient extends BaseClient {
       const logCommand = isBinary
         ? Array.from({ length: command.length }, (_, i) => command.charCodeAt(i).toString(16).padStart(2, '0')).join(' ').toUpperCase()
         : command
-      const dataStr = `[${new Date().toISOString()}] SEND >>>>>>>>>> ${logCommand}`
+      const dataStr = `[${BufferLineSplitter.timestamp()}] SEND >>>>>>>>>> ${logCommand}`
 
       // 检测是否为 HEX 模式发送的二进制数据（包含 0x80-0xFF 范围的字节）
       // 这类数据不能经过 UTF-8 等文本编码，必须作为原始字节直接写入串口
