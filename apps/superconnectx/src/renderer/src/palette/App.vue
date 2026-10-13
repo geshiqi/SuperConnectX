@@ -127,10 +127,15 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
+import { useTheme } from '@superx/foundation/theme/useTheme'
 import type { UserTask, TaskRunEvent } from '../../../shared/tasks/UserTask'
 import TaskEditor from './TaskEditor.vue'
 
 const { t } = useI18n()
+
+// 主题:优先取主窗口经主进程中继的主题,保持与主窗口皮肤同步
+const themeCtl = useTheme()
+let removeThemeListener: (() => void) | null = null
 
 const tasks = ref<UserTask[]>([])
 const keyword = ref('')
@@ -382,6 +387,13 @@ onMounted(async () => {
     isMaximized.value = maximized
   }) ?? null
   isMaximized.value = await window.paletteApi?.isMaximized?.()
+  const relayedTheme = await window.paletteApi?.getTheme?.()
+  if (relayedTheme === 'light' || relayedTheme === 'dark') {
+    themeCtl.applyTheme(relayedTheme)
+  }
+  removeThemeListener = window.paletteApi?.onThemeChanged?.((theme) => {
+    if (theme === 'light' || theme === 'dark') themeCtl.applyTheme(theme)
+  }) ?? null
   await loadTasks()
   // 恢复上次运行状态显示(应用重启后面板是独立会话,不恢复历史输出)
   isRunning.value = await window.taskApi.isRunning()
@@ -393,6 +405,7 @@ onMounted(async () => {
 onUnmounted(() => {
   removeListener?.()
   removeMaximizedListener?.()
+  removeThemeListener?.()
   if (backgroundTimer) clearInterval(backgroundTimer)
 })
 </script>
@@ -402,7 +415,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: var(--container-bg, #1e1e1e);
+  background: var(--bg-primary, #1e1e1e);
   color: var(--text-white, #ccc);
   font-size: 13px;
   overflow: hidden;
@@ -415,7 +428,7 @@ onUnmounted(() => {
   height: 34px;
   padding: 0 6px 0 12px;
   -webkit-app-region: drag;
-  background: var(--statusbar-bg, #2d2d30);
+  background: var(--bg-titlebar, #2d2d30);
   flex-shrink: 0;
 }
 
@@ -486,7 +499,7 @@ onUnmounted(() => {
 }
 
 .empty-hint {
-  color: var(--text-muted, #888);
+  color: var(--text-secondary, #888);
   text-align: center;
   padding: 24px 0;
 }
@@ -520,7 +533,7 @@ onUnmounted(() => {
 }
 
 .task-meta {
-  color: var(--text-muted, #888);
+  color: var(--text-secondary, #888);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -541,8 +554,8 @@ onUnmounted(() => {
   height: 6px;
   flex-shrink: 0;
   cursor: row-resize;
-  background: var(--statusbar-bg, #2d2d30);
-  border-top: 1px solid var(--border-color, #3c3c3c);
+  background: var(--bg-titlebar, #2d2d30);
+  border-top: 1px solid var(--border-secondary, #404040);
   position: relative;
 }
 
@@ -555,7 +568,7 @@ onUnmounted(() => {
   width: 36px;
   height: 2px;
   border-radius: 1px;
-  background: var(--text-muted, #6a6a6a);
+  background: var(--text-secondary, #6a6a6a);
 }
 
 .output-splitter:hover::after {
@@ -567,7 +580,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;
-  background: var(--statusbar-bg, #2d2d30);
+  background: var(--bg-titlebar, #2d2d30);
   flex-shrink: 0;
 }
 
@@ -607,6 +620,6 @@ onUnmounted(() => {
 }
 
 .output-line.stderr { color: #f48771; }
-.output-line.info { color: #9cdcfe; }
+.output-line.info { color: var(--focus-border-color, #007acc); }
 .output-line.step { color: #4ec9b0; font-weight: 600; }
 </style>

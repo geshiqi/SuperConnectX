@@ -22,6 +22,7 @@ export default class IpcTasks {
   private paletteWindow: BrowserWindow | null = null
   private activeSessionId: string | null = null
   private currentRunId: string | null = null
+  private currentTheme: 'dark' | 'light' = 'dark'
 
   static getInstance(): IpcTasks {
     if (IpcTasks.sInstance == null) {
@@ -111,6 +112,16 @@ export default class IpcTasks {
       return { success: true }
     })
     ipcMain.handle('palette:is-maximized', () => this.paletteWindow?.isMaximized() ?? false)
+
+    // 主题中继:主窗口上报 data-theme,转发给面板窗口(打包后 file:// 两窗口 localStorage 不互通)
+    ipcMain.on('palette:set-theme', (_, theme: string) => {
+      this.currentTheme = theme === 'light' ? 'light' : 'dark'
+      const win = this.paletteWindow
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('palette:theme', this.currentTheme)
+      }
+    })
+    ipcMain.handle('palette:get-theme', () => this.currentTheme)
 
     // 应用退出前停掉运行中的任务与后台常驻进程(否则孤儿进程会继续占用 J-Link 等)
     app.on('before-quit', () => {

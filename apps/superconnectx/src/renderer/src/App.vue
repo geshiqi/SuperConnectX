@@ -766,6 +766,14 @@ const fetchAppResource = () => window.toolApi.getAppResource()
 
 onMounted(async () => {
   // 主题初始化已下沉至基础层 ThemeSwitcher（内部 useTheme 在创建时应用持久化主题）
+  // 主题变化中继给命令面板窗口:打包后 file:// 两窗口 localStorage 不互通,经主进程转发保持皮肤同步
+  const relayTheme = (): void => {
+    window.paletteApi?.notifyTheme?.(document.documentElement.getAttribute('data-theme') || 'dark')
+  }
+  relayTheme()
+  const themeObserver = new MutationObserver(relayTheme)
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  onUnmounted(() => themeObserver.disconnect())
 
   await loadNotificationDuration()
 

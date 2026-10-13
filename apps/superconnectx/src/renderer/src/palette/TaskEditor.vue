@@ -297,7 +297,7 @@ const save = async (): Promise<void> => {
 .inline-label {
   white-space: nowrap;
   font-size: 12px;
-  color: var(--text-muted, #888);
+  color: var(--text-secondary, #888);
 }
 
 .steps-header {
@@ -322,13 +322,13 @@ const save = async (): Promise<void> => {
 }
 
 .empty-hint {
-  color: var(--text-muted, #888);
+  color: var(--text-secondary, #888);
   text-align: center;
   padding: 16px 0;
 }
 
 .step-card {
-  border: 1px solid var(--border-color, #3c3c3c);
+  border: 1px solid var(--border-secondary, #404040);
   border-radius: 6px;
   padding: 8px 10px;
   display: flex;
@@ -344,7 +344,7 @@ const save = async (): Promise<void> => {
 
 .step-index {
   font-weight: 700;
-  color: var(--text-muted, #888);
+  color: var(--text-secondary, #888);
 }
 
 .step-ops {
@@ -366,7 +366,7 @@ const save = async (): Promise<void> => {
 
 .field-label {
   font-size: 12px;
-  color: var(--text-muted, #888);
+  color: var(--text-secondary, #888);
   white-space: nowrap;
 }
 
@@ -378,6 +378,6 @@ const save = async (): Promise<void> => {
 
 .hint {
   font-size: 12px;
-  color: var(--text-muted, #888);
+  color: var(--text-secondary, #888);
 }
 </style>

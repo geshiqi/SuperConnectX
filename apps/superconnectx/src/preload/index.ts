@@ -229,6 +229,15 @@ contextBridge.exposeInMainWorld('paletteApi', {
   toggleMaximize: (): Promise<{ success: boolean; maximized?: boolean }> => ipcRenderer.invoke('palette:toggle-maximize'),
   close: (): Promise<{ success: boolean }> => ipcRenderer.invoke('palette:close'),
   isMaximized: (): Promise<boolean> => ipcRenderer.invoke('palette:is-maximized'),
+  notifyTheme: (theme: string): void => {
+    ipcRenderer.send('palette:set-theme', theme)
+  },
+  getTheme: (): Promise<string | null> => ipcRenderer.invoke('palette:get-theme'),
+  onThemeChanged: (callback: (theme: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, theme: string): void => callback(theme)
+    ipcRenderer.on('palette:theme', listener)
+    return () => ipcRenderer.removeListener('palette:theme', listener)
+  },
   onMaximizedChanged: (callback: (maximized: boolean) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, maximized: boolean): void => callback(maximized)
     ipcRenderer.on('palette:maximized-changed', listener)
