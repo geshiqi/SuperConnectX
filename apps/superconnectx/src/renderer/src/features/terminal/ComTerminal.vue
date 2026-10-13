@@ -120,6 +120,12 @@
                 <span class="unit-label">ms</span>
               </div>
             </el-form-item>
+            <el-form-item :label="t('comTerminal.receiveBatchTimeout')">
+              <div class="input-with-unit">
+                <el-input-number v-model="receiveBatchMs" :min="10" :step="10" size="small" class="full-width" :controls="false" placeholder="ms" />
+                <span class="unit-label">ms</span>
+              </div>
+            </el-form-item>
             <el-form-item :label="t('comTerminal.flowControl')">
               <el-select v-model="flowControl" size="small" class="full-width">
                 <el-option :label="t('comTerminal.none')" value="none" />
@@ -227,6 +233,7 @@ const onBaudRateDialogOpened = () => {
 const encoding = ref('utf8')
 const readTimeout = ref(0)
 const writeTimeout = ref(0)
+const receiveBatchMs = ref(10)
 const flowControl = ref<'none' | 'hardware' | 'software'>('none')
 const dtr = ref(false)
 const rts = ref(false)
@@ -310,6 +317,19 @@ watch(hexDisplayMode, (newVal) => {
   unifiedTerminalRef.value?.setHexDisplayMode?.(newVal)
   if (isConnected.value) {
     updateReceiveHexMode(newVal)
+  }
+})
+
+// 监听分包超时变化：保存并热更新处理间隔（不重开端口）
+watch(receiveBatchMs, () => {
+  saveComSettings()
+  if (isConnected.value) {
+    window.connectApi.updateConnect(
+      { connectionType: 'com', comName: props.connection.comName, sessionId: props.connection.sessionId },
+      { receiveBatchMs: receiveBatchMs.value }
+    ).catch((error) => {
+      console.error('Failed to update receive batch timeout:', error)
+    })
   }
 })
 
@@ -422,6 +442,8 @@ const loadComSettings = async () => {
       encoding.value = settings.encoding || 'utf8'
       readTimeout.value = settings.readTimeout || 0
       writeTimeout.value = settings.writeTimeout || 0
+      const savedBatchMs = Number(settings.receiveBatchMs)
+      receiveBatchMs.value = savedBatchMs > 0 ? Math.max(10, Math.floor(savedBatchMs)) : 10
       flowControl.value = settings.flowControl || 'none'
       dtr.value = settings.dtr !== undefined ? settings.dtr : false
       rts.value = settings.rts !== undefined ? settings.rts : false
@@ -464,6 +486,7 @@ const saveComSettings = async () => {
       encoding: encoding.value,
       readTimeout: readTimeout.value,
       writeTimeout: writeTimeout.value,
+      receiveBatchMs: receiveBatchMs.value,
       flowControl: flowControl.value,
       dtr: dtr.value,
       rts: rts.value,
@@ -595,7 +618,8 @@ const handleConnect = async () => {
     encoding: encoding.value,
     readTimeout: readTimeout.value,
     writeTimeout: writeTimeout.value,
-    receiveHex: hexDisplayMode.value
+    receiveHex: hexDisplayMode.value,
+    receiveBatchMs: receiveBatchMs.value
   }
   isConnecting.value = true
   unifiedTerminalRef.value?.appendToTerminal(`\n${t('comTerminal.connecting', { port: props.connection.comName })}\n`)

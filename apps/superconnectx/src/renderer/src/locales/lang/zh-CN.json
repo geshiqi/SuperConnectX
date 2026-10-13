@@ -346,6 +346,7 @@
     "advancedSettings": "串口高级设置",
     "openTimeout": "打开超时",
     "writeTimeout": "写超时",
+    "receiveBatchTimeout": "分包超时",
     "flowControl": "流控制",
     "none": "无",
     "even": "偶校验",

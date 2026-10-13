@@ -346,6 +346,7 @@
     "advancedSettings": "Serial Advanced Settings",
     "openTimeout": "Open Timeout",
     "writeTimeout": "Write Timeout",
+    "receiveBatchTimeout": "Receive Batch Timeout",
     "flowControl": "Flow Control",
     "none": "None",
     "even": "Even",

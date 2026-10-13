@@ -9,9 +9,20 @@ const DEFAULT_DATA_BITS = 8
 const DEFAULT_STOP_BITS = 1
 const DEFAULT_PARITY = 'none' as const
 const DEFAULT_ENCODING = 'utf8'
-const READ_INTERVAL_MS = 10 // 固定10ms读取间隔
-const FLUSH_TIMEOUT_MS = 100 // 空闲超时：buffer 中有数据但超过此时间无新数据到达，强制刷新
+const DEFAULT_RECEIVE_BATCH_MS = 10 // 默认分包超时：与 SuperCom 的 DEFAULT_SUBCONTRACTING_TIME_OUT 对齐
+const MIN_RECEIVE_BATCH_MS = 10 // 过小会退化为逐片处理，失去合并意义
+const FLUSH_TIMEOUT_MS = 100 // 空闲刷新检查间隔：buffer 中有数据但超过空闲阈值无新数据到达，强制刷新
 const MAX_BUFFER_BYTES = 1024 * 1024 // 无换行输出也必须有上限，避免接收缓冲区无限增长
+
+function normalizeReceiveBatchMs(value: unknown): number {
+  const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : 0
+  return n > 0 ? Math.max(MIN_RECEIVE_BATCH_MS, n) : DEFAULT_RECEIVE_BATCH_MS
+}
+
+/** 空闲刷新阈值：至少 100ms，且不小于分包窗口的 2 倍，否则窗口未满就被提前刷出 */
+function idleFlushThresholdMs(batchMs: number): number {
+  return Math.max(FLUSH_TIMEOUT_MS, batchMs * 2)
+}
 const CLOSE_TIMEOUT_MS = 5000
 
 interface SerialConnection {
@@ -26,6 +37,7 @@ interface SerialConnection {
   onClose: any
   onLog: any
   receiveHex: boolean
+  receiveBatchMs: number
   splitter: BufferLineSplitter
 }
 
@@ -75,7 +87,7 @@ export default class ComClient extends BaseClient {
   private checkFlushBuffer(connection: SerialConnection): void {
     if (!connection.buffer || connection.buffer.length === 0) return
     const elapsed = Date.now() - connection.lastDataTime
-    if (elapsed < FLUSH_TIMEOUT_MS) return
+    if (elapsed < idleFlushThresholdMs(connection.receiveBatchMs)) return
 
     const { buffer, splitter, onData, onLog } = connection
     const timestamp = BufferLineSplitter.timestamp()
@@ -148,6 +160,7 @@ export default class ComClient extends BaseClient {
             onClose: onClose,
             onLog: onLog,
             receiveHex: info.receiveHex === true,
+            receiveBatchMs: normalizeReceiveBatchMs(info.receiveBatchMs),
             splitter: new BufferLineSplitter(encoding, info.receiveHex === true)
           }
           this.serialConnections.set(sessionId, connection)
@@ -162,10 +175,10 @@ export default class ComClient extends BaseClient {
             }
           })
 
-          // 使用固定间隔处理数据
+          // 使用分包超时作为处理间隔：窗口内到达的分片合并后一次处理
           connection.timer = setInterval(() => {
             this.processBuffer(connection)
-          }, READ_INTERVAL_MS)
+          }, connection.receiveBatchMs)
 
           // 空闲超时刷新：如果 buffer 中有数据但长时间无新数据，强制刷新剩余数据
           connection.flushTimer = setInterval(() => {
@@ -390,7 +403,18 @@ export default class ComClient extends BaseClient {
     dtr?: boolean
     flowControl?: 'none' | 'hardware' | 'software'
     receiveHex?: boolean
+    receiveBatchMs?: number
   }): Promise<object> {
+
+    // 动态更新分包超时：只调整处理间隔，无需重开端口
+    if (config.receiveBatchMs !== undefined) {
+      const connection = this.serialConnections.get(connId)
+      if (connection) {
+        this.applyReceiveBatchMs(connId, connection, config.receiveBatchMs)
+        return { success: true, message: 'Updated successfully' }
+      }
+      return { success: false, message: 'Connection does not exist' }
+    }
 
     // 动态更新 receiveHex 参数
     if (config.receiveHex !== undefined) {
@@ -478,6 +502,7 @@ export default class ComClient extends BaseClient {
             onClose: savedOnClose,
             onLog: connection.onLog,
             receiveHex: connection.receiveHex,
+            receiveBatchMs: config.receiveBatchMs !== undefined ? normalizeReceiveBatchMs(config.receiveBatchMs) : connection.receiveBatchMs,
             splitter: new BufferLineSplitter(newEncoding, connection.receiveHex)
           }
             this.serialConnections.set(connId, newConnection)
@@ -495,7 +520,7 @@ export default class ComClient extends BaseClient {
           // 重新启动数据收集定时器
           newConnection.timer = setInterval(() => {
             this.processBuffer(newConnection)
-          }, READ_INTERVAL_MS)
+          }, newConnection.receiveBatchMs)
 
           // 空闲超时刷新
           newConnection.flushTimer = setInterval(() => {
@@ -569,6 +594,7 @@ export default class ComClient extends BaseClient {
           onClose: oldConnection.onClose,
           onLog: oldConnection.onLog,
           receiveHex: oldConnection.receiveHex,
+          receiveBatchMs: oldConnection.receiveBatchMs,
           splitter: new BufferLineSplitter(encoding, oldConnection.receiveHex)
         }
         this.serialConnections.set(connId, newConnection)
@@ -585,7 +611,7 @@ export default class ComClient extends BaseClient {
 
         newConnection.timer = setInterval(() => {
           this.processBuffer(newConnection)
-        }, READ_INTERVAL_MS)
+        }, newConnection.receiveBatchMs)
 
         // 空闲超时刷新
         newConnection.flushTimer = setInterval(() => {
@@ -609,6 +635,18 @@ export default class ComClient extends BaseClient {
         this.logger.error(`cannot recover serial port: ${err.message}`)
       }
     })
+  }
+
+  private applyReceiveBatchMs(connId: string, connection: SerialConnection, value: number): void {
+    const batchMs = normalizeReceiveBatchMs(value)
+    connection.receiveBatchMs = batchMs
+    if (connection.timer) {
+      clearInterval(connection.timer)
+      connection.timer = setInterval(() => {
+        this.processBuffer(connection)
+      }, batchMs)
+    }
+    this.logger.info(`update serial receiveBatchMs: ${batchMs}ms, sessionId: ${connId}`)
   }
 
   setReceiveHex(connId: string, receiveHex: boolean): void {
