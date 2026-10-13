@@ -11,3 +11,6 @@ tests/report
 *.tsbuildinfo
 pnpm-debug.log*
 .txt
+
+# graphify 知识图谱本地产物
+graphify-out/
