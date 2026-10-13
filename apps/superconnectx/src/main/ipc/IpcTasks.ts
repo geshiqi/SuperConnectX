@@ -79,6 +79,13 @@ export default class IpcTasks {
 
     ipcMain.handle('task:is-running', () => this.runner.isRunning())
 
+    // 后台常驻进程管理
+    ipcMain.handle('task:list-background', () => this.runner.listBackground())
+    ipcMain.handle('task:stop-background', () => {
+      const stopped = this.runner.stopBackgroundAll()
+      return { success: true, stopped }
+    })
+
     // 主窗口上报当前激活的终端会话(target: 'active' 的解析来源)
     ipcMain.on('task:set-active-session', (_, sessionId: string | null) => {
       this.activeSessionId = sessionId || null
@@ -105,9 +112,10 @@ export default class IpcTasks {
     })
     ipcMain.handle('palette:is-maximized', () => this.paletteWindow?.isMaximized() ?? false)
 
-    // 应用退出前停掉运行中的任务(杀 shell 子进程)
+    // 应用退出前停掉运行中的任务与后台常驻进程(否则孤儿进程会继续占用 J-Link 等)
     app.on('before-quit', () => {
       this.runner.stop()
+      this.runner.stopBackgroundAll()
     })
   }
 

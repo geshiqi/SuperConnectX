@@ -98,6 +98,15 @@
           <template v-else>{{ t('palette.outputIdle') }}</template>
         </span>
         <div class="output-actions">
+          <el-button
+            v-if="backgroundProcs.length > 0"
+            size="small"
+            type="warning"
+            :title="backgroundProcs.map((proc) => `${proc.name} (PID ${proc.pid ?? '?'})`).join('\n')"
+            @click="stopBackground"
+          >
+            {{ t('palette.backgroundCount', { count: backgroundProcs.length }) }}
+          </el-button>
           <el-button v-if="isRunning" size="small" type="danger" @click="stopRun">
             <el-icon style="margin-right: 3px"><VideoPause /></el-icon>{{ t('palette.stop') }}
           </el-button>
@@ -246,6 +255,30 @@ const stopRun = async (): Promise<void> => {
   await window.taskApi.stop()
 }
 
+// ===== 后台常驻进程 =====
+interface BackgroundProc {
+  id: string
+  name: string
+  pid?: number
+  startedAt: number
+}
+const backgroundProcs = ref<BackgroundProc[]>([])
+let backgroundTimer: ReturnType<typeof setInterval> | null = null
+
+const refreshBackground = async (): Promise<void> => {
+  try {
+    backgroundProcs.value = await window.taskApi.listBackground()
+  } catch { /* ignore */ }
+}
+
+const stopBackground = async (): Promise<void> => {
+  const result = await window.taskApi.stopBackground()
+  if (result.stopped > 0) {
+    appendOutput(`${t('palette.backgroundStopped', { count: result.stopped })}`, 'info')
+  }
+  await refreshBackground()
+}
+
 const clearOutput = (): void => {
   outputLines.value = []
   lastRunStatus.value = null
@@ -352,12 +385,15 @@ onMounted(async () => {
   await loadTasks()
   // 恢复上次运行状态显示(应用重启后面板是独立会话,不恢复历史输出)
   isRunning.value = await window.taskApi.isRunning()
+  await refreshBackground()
+  backgroundTimer = setInterval(refreshBackground, 5000)
   searchInputRef.value?.focus?.()
 })
 
 onUnmounted(() => {
   removeListener?.()
   removeMaximizedListener?.()
+  if (backgroundTimer) clearInterval(backgroundTimer)
 })
 </script>
 

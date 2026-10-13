@@ -75,6 +75,11 @@
               <el-input-number v-model="step.timeoutMs" :min="0" :step="1000" size="small" :controls="false" style="width: 100%" />
             </div>
           </div>
+          <div class="target-row">
+            <span class="field-label">{{ t('palette.fieldBackground') }}</span>
+            <el-switch v-model="step.background" />
+            <span class="hint">{{ t('palette.backgroundHint') }}</span>
+          </div>
         </template>
 
         <!-- 延时步骤 -->

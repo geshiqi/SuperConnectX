@@ -179,6 +179,37 @@ describe('TaskRunner', () => {
     expect(events.filter((e) => e.kind === 'repeat-start')).toHaveLength(3)
   })
 
+  it('后台模式:存活即完成并登记,可停止全部', async () => {
+    const { events, emit } = collect()
+    const connector = makeConnector()
+    const started = Date.now()
+    const result = await runner.run(
+      runTask([{ type: 'shell', command: 'node -e setInterval(console.log,60000)', background: true }]),
+      { activeSessionId: null, emit, connector }
+    )
+    // 观察期约 2.5s 后步骤成功,任务整体完成,不等待 60s 进程
+    expect(result.success).toBe(true)
+    expect(Date.now() - started).toBeLessThan(10000)
+    expect(runner.isRunning()).toBe(false)
+    expect(runner.listBackground()).toHaveLength(1)
+    const infos = events.filter((e) => e.kind === 'output') as Array<{ kind: 'output'; text: string }>
+    expect(infos.some((e) => e.text.includes('后台'))).toBe(true)
+    // 停止全部后台进程
+    const stopped = runner.stopBackgroundAll()
+    expect(stopped).toBe(1)
+    expect(runner.listBackground()).toHaveLength(0)
+  })
+
+  it('后台模式:观察期内退出视为失败', async () => {
+    const { emit } = collect()
+    const result = await runner.run(
+      runTask([{ type: 'shell', command: 'node -e "process.exit(3)"', background: true }]),
+      { activeSessionId: null, emit, connector: makeConnector() }
+    )
+    expect(result.success).toBe(false)
+    expect(runner.listBackground()).toHaveLength(0)
+  })
+
   it('运行中拒绝第二个任务,stop 可中止', async () => {
     const first = runner.run(runTask([{ type: 'delay', ms: 5_000 }]), {
       activeSessionId: null,

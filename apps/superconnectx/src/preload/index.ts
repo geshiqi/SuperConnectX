@@ -208,6 +208,9 @@ contextBridge.exposeInMainWorld('taskApi', {
     ipcRenderer.invoke('task:run', { taskId, external: options?.external }),
   stop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('task:stop'),
   isRunning: (): Promise<boolean> => ipcRenderer.invoke('task:is-running'),
+  listBackground: (): Promise<Array<{ id: string; name: string; pid?: number; startedAt: number }>> =>
+    ipcRenderer.invoke('task:list-background'),
+  stopBackground: (): Promise<{ success: boolean; stopped: number }> => ipcRenderer.invoke('task:stop-background'),
   notifyActiveSession: (sessionId: string | null): void => {
     ipcRenderer.send('task:set-active-session', sessionId)
   },

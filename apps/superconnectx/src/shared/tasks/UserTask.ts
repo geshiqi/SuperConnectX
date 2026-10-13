@@ -17,6 +17,8 @@ export interface TaskShellStep {
   encoding?: string
   /** 超时(ms),超时杀掉进程树并视为失败 */
   timeoutMs?: number
+  /** 后台运行:启动观察期后存活即标记步骤完成,进程常驻后台(RTT Server 等),不受超时约束 */
+  background?: boolean
   /** 该步失败是否终止整个任务,默认 true */
   stopOnFail?: boolean
 }

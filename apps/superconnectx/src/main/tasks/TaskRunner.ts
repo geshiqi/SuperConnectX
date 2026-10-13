@@ -4,6 +4,7 @@
  * 内置动作通过 IpcConnector 的会话接口完成(与 MCP 共用同一层,用户会话同样注册其中)。
  */
 import { spawn, type ChildProcess } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -42,12 +43,22 @@ interface StepResult {
   message?: string
 }
 
+export interface BackgroundProcessInfo {
+  id: string
+  name: string
+  pid: number | undefined
+  startedAt: number
+}
+
 const DEFAULT_CONNECT_TIMEOUT_MS = 20_000
+/** 后台模式启动观察期:期间退出/报错视为步骤失败,存活则转后台常驻 */
+const BACKGROUND_GRACE_MS = 2500
 
 export class TaskRunner {
   private aborted = false
   private currentShell: ChildProcess | null = null
   private running = false
+  private backgroundShells = new Map<string, { child: ChildProcess; info: BackgroundProcessInfo }>()
 
   isRunning(): boolean {
     return this.running
@@ -57,6 +68,22 @@ export class TaskRunner {
   stop(): void {
     this.aborted = true
     this.killCurrentShell()
+  }
+
+  /** 后台常驻进程列表 */
+  listBackground(): BackgroundProcessInfo[] {
+    return Array.from(this.backgroundShells.values()).map((entry) => entry.info)
+  }
+
+  /** 停掉所有后台常驻进程,返回停止数量(应用退出时也会调用) */
+  stopBackgroundAll(): number {
+    let count = 0
+    for (const [, entry] of this.backgroundShells) {
+      this.killShell(entry.child)
+      count++
+    }
+    this.backgroundShells.clear()
+    return count
   }
 
   async run(task: UserTask, options: RunOptions): Promise<{ success: boolean; aborted: boolean }> {
@@ -142,6 +169,9 @@ export class TaskRunner {
   }
 
   private async runShell(step: TaskShellStep, options: RunOptions): Promise<StepResult> {
+    if (step.background) {
+      return await this.runShellBackground(step, options)
+    }
     if (options.external) {
       if (process.platform === 'win32') {
         return await this.runShellExternal(step, options)
@@ -222,6 +252,89 @@ export class TaskRunner {
         if (this.aborted) finish(false, code ?? undefined, 'aborted')
         else finish(code === 0, code ?? undefined, code === 0 ? undefined : `exit code ${code}`)
       })
+    })
+  }
+
+  /**
+   * 后台模式:启动观察期(BACKGROUND_GRACE_MS)内退出/报错视为失败,存活则登记为
+   * 后台常驻进程并立即完成步骤,释放运行槽。观察期内输出正常上报,转后台后丢弃。
+   * 外部终端请求 + 后台组合时仍用隐藏进程(外部窗口无法纳入进程管理)。
+   */
+  private async runShellBackground(step: TaskShellStep, options: RunOptions): Promise<StepResult> {
+    const { file, args } = this.buildShellCommand(step)
+    const encoding = step.encoding || 'utf8'
+    if (options.external) {
+      options.emit({ kind: 'output', runId: '', stream: 'info', text: '后台模式使用隐藏进程执行,不弹外部窗口' })
+    }
+    return new Promise<StepResult>((resolve) => {
+      let child: ChildProcess
+      try {
+        child = spawn(file, args, {
+          cwd: step.cwd || undefined,
+          windowsHide: true,
+          shell: false
+        })
+      } catch (error) {
+        return resolve({ success: false, message: `启动失败: ${(error as Error).message}` })
+      }
+
+      const decode = (buf: Buffer): string => {
+        try {
+          return iconv.decode(buf, encoding)
+        } catch {
+          return buf.toString('latin1')
+        }
+      }
+
+      let settled = false
+      let drain = false
+      const info: BackgroundProcessInfo = {
+        id: randomUUID(),
+        name: step.command.length > 60 ? `${step.command.slice(0, 60)}...` : step.command,
+        pid: child.pid,
+        startedAt: Date.now()
+      }
+
+      child.stdout?.on('data', (buf: Buffer) => {
+        const text = decode(buf)
+        if (text && !drain) options.emit({ kind: 'output', runId: '', stream: 'stdout', text })
+      })
+      child.stderr?.on('data', (buf: Buffer) => {
+        const text = decode(buf)
+        if (text && !drain) options.emit({ kind: 'output', runId: '', stream: 'stderr', text })
+      })
+
+      const fail = (message: string, exitCode?: number): void => {
+        if (settled) return
+        settled = true
+        resolve({ success: false, exitCode, message })
+      }
+
+      child.on('error', (error) => fail(error.message))
+      child.on('close', (code) => {
+        // 观察期内自己退出:视为步骤失败(命令不存在/参数错等秒退场景)
+        if (!settled) {
+          fail(`后台进程在观察期内退出: exit code ${code ?? '?'}`, code ?? undefined)
+          return
+        }
+        // 已转后台后的退出:从登记表移除
+        this.backgroundShells.delete(info.id)
+        options.emit({ kind: 'output', runId: '', stream: 'info', text: `后台进程已退出: ${info.name} (exit ${code ?? '?'})` })
+      })
+
+      setTimeout(() => {
+        if (settled) return
+        settled = true
+        drain = true
+        this.backgroundShells.set(info.id, { child, info })
+        options.emit({
+          kind: 'output',
+          runId: '',
+          stream: 'info',
+          text: `进程已转后台运行 (PID ${child.pid ?? '?'}),可在面板状态栏停止`
+        })
+        resolve({ success: true, message: `background pid ${child.pid ?? '?'}` })
+      }, BACKGROUND_GRACE_MS)
     })
   }
 

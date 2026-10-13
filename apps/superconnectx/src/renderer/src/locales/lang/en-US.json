@@ -846,6 +846,10 @@
     "runExternal": "Run in external terminal (Windows console)",
     "minimize": "Minimize",
     "maximize": "Maximize",
-    "restore": "Restore"
+    "restore": "Restore",
+    "fieldBackground": "Background",
+    "backgroundHint": "Step completes once started; process stays alive (e.g. RTT Server)",
+    "backgroundCount": "Background {count} · stop",
+    "backgroundStopped": "Stopped {count} background process(es)"
   }
 }

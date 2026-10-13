@@ -846,6 +846,10 @@
     "runExternal": "在外部终端运行(Windows 控制台窗口)",
     "minimize": "最小化",
     "maximize": "最大化",
-    "restore": "还原"
+    "restore": "还原",
+    "fieldBackground": "后台运行",
+    "backgroundHint": "启动存活后步骤即完成,进程常驻后台(如 RTT Server)",
+    "backgroundCount": "后台 {count} · 停止",
+    "backgroundStopped": "已停止 {count} 个后台进程"
   }
 }

@@ -183,6 +183,8 @@ declare global {
       run: (taskId: string, options?: { external?: boolean }) => Promise<{ success: boolean; runId?: string; message?: string }>
       stop: () => Promise<{ success: boolean }>
       isRunning: () => Promise<boolean>
+      listBackground: () => Promise<Array<{ id: string; name: string; pid?: number; startedAt: number }>>
+      stopBackground: () => Promise<{ success: boolean; stopped: number }>
       notifyActiveSession: (sessionId: string | null) => void
       onTaskEvent: (callback: (event: import('../shared/tasks/UserTask').TaskRunEvent) => void) => () => void
     }
