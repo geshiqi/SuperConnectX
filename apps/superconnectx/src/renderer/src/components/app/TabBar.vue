@@ -4,6 +4,7 @@
     :active-tab-id="activeTabId"
     :panel-id="panelId"
     @select-tab="id => { $emit('switchTab', id); $emit('hideTabMenu') }"
+    @close-tab="id => { const tab = getConnectionTab(id); if (tab) $emit('closeSingle', tab) }"
     @hide-tab-menu="$emit('hideTabMenu')"
     @tabs-nav-context-menu="$emit('tabsNavContextMenu', $event)"
     @tab-context-menu="(event, id) => $emit('tabContextMenu', event, getConnectionTab(id))"

@@ -56,6 +56,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   selectTab: [tabId: string]
+  closeTab: [tabId: string]
   hideTabMenu: []
   tabsNavContextMenu: [event: MouseEvent]
   tabContextMenu: [event: MouseEvent, tabId: string]
@@ -77,6 +78,12 @@ const handleTabsWheel = (event: WheelEvent): void => {
 }
 
 const onTabMouseDown = (event: MouseEvent, tabId: string): void => {
+  if (event.button === 1) {
+    // 中键关闭标签(浏览器习惯);preventDefault 抑制中键自动滚动光标
+    event.preventDefault()
+    emit('closeTab', tabId)
+    return
+  }
   if (event.button !== 0) return
   emit('selectTab', tabId)
   emit('hideTabMenu')
