@@ -60,7 +60,8 @@ const exportItems: ExportItem[] = [
   { key: 'commandGroups', label: t('exportDialog.commandGroups'), desc: t('exportDialog.commandGroupsDesc') },
   { key: 'commands', label: t('exportDialog.commands'), desc: t('exportDialog.commandsDesc') },
   { key: 'comPorts', label: t('exportDialog.comPorts'), desc: t('exportDialog.comPortsDesc') },
-  { key: 'connections', label: t('exportDialog.connections'), desc: t('exportDialog.connectionsDesc') }
+  { key: 'connections', label: t('exportDialog.connections'), desc: t('exportDialog.connectionsDesc') },
+  { key: 'userTasks', label: t('exportDialog.userTasks'), desc: t('exportDialog.userTasksDesc') }
 ]
 
 const open = () => {

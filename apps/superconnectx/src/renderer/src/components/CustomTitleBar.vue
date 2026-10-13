@@ -133,6 +133,15 @@
 
     <template #right>
       <div class="titlebar-actions">
+        <!-- 命令面板:自定义任务(编译/烧录等步骤流) -->
+        <button
+          class="palette-btn"
+          :title="t('palette.open')"
+          @click="openPalette"
+        >
+          <el-icon :size="15"><Operation /></el-icon>
+        </button>
+
         <div class="layout-controls">
           <LayoutToggle
             variant="sidebar"
@@ -237,6 +246,9 @@ let removeMaximizedListener: (() => void) | undefined
 const minimizeWindow = () => window.windowApi.minimizeWindow()
 const maximizeWindow = () => window.windowApi.maximizeWindow()
 const closeWindow = () => window.windowApi.closeWindow()
+const openPalette = (): void => {
+  window.paletteApi?.toggle()
+}
 
 const hideFileMenu = () => {
   setTimeout(() => {
@@ -620,6 +632,26 @@ const handleClickOutside = (event: MouseEvent) => {
 }
 
 .titlebar-btn:hover:not(.close-btn) {
+  background-color: var(--overlay-hover);
+}
+
+.palette-btn {
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  color: var(--text-white);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin-right: 2px;
+  -webkit-app-region: no-drag;
+  transition: background-color 0.2s;
+}
+
+.palette-btn:hover {
   background-color: var(--overlay-hover);
 }
 

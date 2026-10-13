@@ -444,6 +444,20 @@ const {
   bindTabMenuDismiss
 } = useTabManager(comTerminalRefs, telnetTerminalRefs)
 
+// 命令面板:上报当前激活的终端会话(target: 'active' 的解析来源)
+watch(
+  () => {
+    const tab = connectionTabs.value.find((item) => item.id.toString() === activeTabId.value)
+    if (!tab) return null
+    if (!['com', 'telnet', 'ftp'].includes(String(tab.connectionType))) return null
+    return tab.sessionId != null ? String(tab.sessionId) : null
+  },
+  (sessionId) => {
+    window.taskApi?.notifyActiveSession(sessionId ?? null)
+  },
+  { immediate: true }
+)
+
 // ---- Split Panel ----
 const {
   splitState,

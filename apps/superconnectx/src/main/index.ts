@@ -11,6 +11,7 @@ import IpcSerialPort from './ipc/IpcSerialPort'
 import IpcVirtualPort from './ipc/IpcVirtualPort'
 import IpcMain from './ipc/IpcMain'
 import IpcDataCheck from './ipc/IpcDataCheck'
+import IpcTasks from './ipc/IpcTasks'
 import logger from './ipc/IpcAppLogger'
 import { migrateDataIfNeeded, initAppPaths, cleanupChromiumClutter, getInstanceIndex } from './utils/AppDir'
 import McpHttpServer from './mcp/McpHttpServer'
@@ -138,6 +139,7 @@ IpcSerialPort.getInstance().init(protocolLogger, windows)
 IpcVirtualPort.getInstance().init(protocolLogger, windows)
 IpcMain.getInstance().init(protocolLogger, windows)
 IpcDataCheck.getInstance().init()
+IpcTasks.getInstance().init()
 
 // 自动更新模块默认不加载，仅在用户点击"检查更新"并确认后才动态加载
 // electron-updater 在被 import 时就会做网络操作，提前加载会在公司内网代理环境触发告警

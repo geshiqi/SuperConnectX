@@ -354,6 +354,15 @@ export default class IpcConnector {
     return result
   }
 
+  /** 按串口名在现有会话中查找会话 ID(命令面板内置动作的目标解析) */
+  findSessionIdByComName(comName: string): string | null {
+    const target = String(comName)
+    for (const [sessionId, conn] of this.mcpConnections.entries()) {
+      if (conn?.comName === target) return sessionId
+    }
+    return null
+  }
+
   async uploadMcpSessionFile(sessionId: string, localFilePath: string, remoteFileName: string): Promise<object> {
     const conn = this.mcpConnections.get(String(sessionId))
     if (!conn) return { success: false, message: `Session not found: ${sessionId}` }

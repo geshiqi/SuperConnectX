@@ -198,3 +198,27 @@ contextBridge.exposeInMainWorld('mcpApi', {
   installSkill: () => ipcRenderer.invoke('mcp:install-skill'),
   getSkillInstallInfo: () => ipcRenderer.invoke('mcp:get-skill-install-info')
 })
+
+// 命令面板:自定义任务(步骤流)
+contextBridge.exposeInMainWorld('taskApi', {
+  list: (): Promise<import('../shared/tasks/UserTask').UserTask[]> => ipcRenderer.invoke('task:list'),
+  save: (task: import('../shared/tasks/UserTask').UserTask): Promise<{ success: boolean; tasks?: import('../shared/tasks/UserTask').UserTask[]; message?: string }> => ipcRenderer.invoke('task:save', task),
+  delete: (id: string): Promise<{ success: boolean; tasks: import('../shared/tasks/UserTask').UserTask[] }> => ipcRenderer.invoke('task:delete', id),
+  run: (taskId: string): Promise<{ success: boolean; runId?: string; message?: string }> => ipcRenderer.invoke('task:run', { taskId }),
+  stop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('task:stop'),
+  isRunning: (): Promise<boolean> => ipcRenderer.invoke('task:is-running'),
+  notifyActiveSession: (sessionId: string | null): void => {
+    ipcRenderer.send('task:set-active-session', sessionId)
+  },
+  onTaskEvent: (callback: (event: import('../shared/tasks/UserTask').TaskRunEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: import('../shared/tasks/UserTask').TaskRunEvent): void => callback(data)
+    ipcRenderer.on('task:event', listener)
+    return () => ipcRenderer.removeListener('task:event', listener)
+  }
+})
+
+contextBridge.exposeInMainWorld('paletteApi', {
+  toggle: (): void => {
+    ipcRenderer.send('palette:toggle')
+  }
+})

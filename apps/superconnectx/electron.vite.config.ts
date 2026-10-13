@@ -85,7 +85,10 @@ export default defineConfig({
       outDir: resolve(here, 'out/renderer'), // 明确渲染进程输出到 out/renderer
       minify: 'esbuild',
       rollupOptions: {
-        input: resolve(here, 'src/renderer/index.html'), // 显式 html 入口，摆脱 cwd 依赖
+        input: {
+          main: resolve(here, 'src/renderer/index.html'), // 主窗口
+          palette: resolve(here, 'src/renderer/palette.html') // 命令面板窗口
+        },
         output: {
           manualChunks: {
             'monaco-editor': ['monaco-editor']

@@ -9,6 +9,7 @@ import AppSettingsStorage from '../storage/AppSettingsStorage'
 import SettingsStorage from '../storage/SettingsStorage'
 import CommandHistoryStorage from '../storage/CommandHistoryStorage'
 import LogFilterStorage from '../storage/LogFilterStorage'
+import UserTaskStorage from '../storage/UserTaskStorage'
 import IpcConnector from './IpcConnector'
 import BackupManager from '../utils/BackupManager'
 import AdmZip from 'adm-zip'
@@ -326,6 +327,14 @@ async function exportDataToZip(
           data: sanitized
         })
       }
+
+      if (selections.includes('userTasks')) {
+        addJsonEntry('userTasks.json', {
+          exportTime: new Date().toISOString(),
+          type: 'userTasks',
+          data: new UserTaskStorage().getTasks()
+        })
+      }
     } catch (err: any) {
       settle(err)
       return
@@ -490,13 +499,23 @@ async function importDataFromZip(
     logger.info(`[importDataFromZip] connections: ${connsAdded} added, ${connsSkipped} skipped`)
   }
 
+  // ---- 6. userTasks (自动新增，按 id 去重) ----
+  const userTasksData = readJsonEntry('userTasks.json')
+  if (userTasksData?.data && Array.isArray(userTasksData.data)) {
+    const { added, skipped } = new UserTaskStorage().importTasks(userTasksData.data)
+    result.userTasksImported = added
+    result.userTasksSkipped = skipped
+    logger.info(`[importDataFromZip] userTasks: ${added} added, ${skipped} skipped`)
+  }
+
   // 检查是否至少有一类数据被导入
   const hasAnyData =
     result.settingsImported ||
     result.comPortsImported ||
     result.groupsImported !== undefined ||
     result.commandsImported !== undefined ||
-    result.connectionsImported !== undefined
+    result.connectionsImported !== undefined ||
+    result.userTasksImported !== undefined
 
   if (!hasAnyData) {
     return { __invalidFormat: true }
