@@ -57,8 +57,16 @@
       </div>
     </div>
 
+    <!-- 输出区高度拖拽条 -->
+    <div
+      class="output-splitter"
+      title="拖拽调整输出区高度(双击复位)"
+      @mousedown="startResize"
+      @dblclick="resetOutputHeight"
+    ></div>
+
     <!-- 输出区 -->
-    <div class="output-panel">
+    <div class="output-panel" :style="outputPanelStyle">
       <div class="output-header">
         <span class="status">
           <template v-if="isRunning">
@@ -250,6 +258,55 @@ const closeWindow = (): void => {
   window.close()
 }
 
+// ===== 输出区高度拖拽 =====
+const OUTPUT_HEIGHT_KEY = 'palette-output-height'
+const OUTPUT_MIN = 100
+
+const outputHeight = ref<number | null>(null)
+try {
+  const saved = Number(localStorage.getItem(OUTPUT_HEIGHT_KEY))
+  if (saved >= OUTPUT_MIN) outputHeight.value = saved
+} catch { /* ignore */ }
+
+// 窗口变小后夹住上限,避免输出区把任务列表挤没
+const outputPanelStyle = computed(() => {
+  if (outputHeight.value == null) return {}
+  const max = Math.max(OUTPUT_MIN, window.innerHeight - 170)
+  return { height: `${Math.min(outputHeight.value, max)}px`, flex: 'none' }
+})
+
+const onResizeMove = (e: MouseEvent): void => {
+  // 拖拽条在窗口坐标系内,输出区高度 = 窗口底边到拖拽条的距离
+  const height = Math.min(Math.max(window.innerHeight - e.clientY - 6, OUTPUT_MIN), window.innerHeight - 170)
+  outputHeight.value = height
+}
+
+const stopResize = (): void => {
+  document.removeEventListener('mousemove', onResizeMove)
+  document.removeEventListener('mouseup', stopResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  if (outputHeight.value != null) {
+    try {
+      localStorage.setItem(OUTPUT_HEIGHT_KEY, String(Math.round(outputHeight.value)))
+    } catch { /* ignore */ }
+  }
+}
+
+const startResize = (e: MouseEvent): void => {
+  if (e.button !== 0) return
+  document.addEventListener('mousemove', onResizeMove)
+  document.addEventListener('mouseup', stopResize)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
+
+const resetOutputHeight = (): void => {
+  outputHeight.value = null
+  try {
+    localStorage.removeItem(OUTPUT_HEIGHT_KEY)
+  } catch { /* ignore */ }
+}
 
 watch(filteredTasks, () => {
   if (selectedIndex.value >= filteredTasks.value.length) selectedIndex.value = 0
@@ -381,6 +438,30 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
+.output-splitter {
+  height: 6px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  background: var(--statusbar-bg, #2d2d30);
+  border-top: 1px solid var(--border-color, #3c3c3c);
+  position: relative;
+}
+
+.output-splitter::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--text-muted, #6a6a6a);
+}
+
+.output-splitter:hover::after {
+  background: var(--focus-border-color, #409eff);
+}
 
 .output-header {
   display: flex;
