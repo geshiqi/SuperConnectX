@@ -17,7 +17,7 @@
             class="monitor-fill"
             :style="{ width: `${memPercent}%`, backgroundColor: progressColor(memPercent) }"
           >
-            <span class="monitor-text">{{ memLabel }} {{ memRate }}%</span>
+            <span class="monitor-text">{{ memLabel }} {{ memText || `${memRate}%` }}</span>
           </div>
         </div>
       </div>
@@ -37,8 +37,8 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
  */
 const props = withDefaults(
   defineProps<{
-    /** 数据源：返回 { cpu, memRate }（字符串或数字），由宿主桥接到主进程 */
-    fetcher: () => Promise<{ cpu: number | string; memRate: number | string }> | { cpu: number | string; memRate: number | string }
+    /** 数据源：返回 { cpu, memRate, memText? }（字符串或数字），由宿主桥接到主进程；memText 覆盖内存条文本显示 */
+    fetcher: () => Promise<{ cpu: number | string; memRate: number | string; memText?: string }> | { cpu: number | string; memRate: number | string; memText?: string }
     /** 轮询间隔（毫秒） */
     interval?: number
     /** CPU 标签文案 */
@@ -55,6 +55,7 @@ const props = withDefaults(
 
 const cpuUsage = ref<number | string>('0.00')
 const memRate = ref<number | string>('0.00')
+const memText = ref<string>('')
 
 const toPercent = (value: number | string): number => {
   const num = Number(value)
@@ -79,6 +80,7 @@ const fetchResourceData = async (): Promise<void> => {
     const data = await props.fetcher()
     cpuUsage.value = data.cpu
     memRate.value = data.memRate
+    memText.value = data.memText ?? ''
   } catch (error) {
     console.error('Failed to get resource data:', error)
   }

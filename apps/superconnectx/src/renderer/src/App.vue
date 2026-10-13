@@ -287,8 +287,9 @@
     <template #statusbar>
       <StatusBar>
         <template #left>
-          <div class="resource-monitor">
-            <ResourceMonitor mem-label="内存" :fetcher="fetchAppResource" />
+          <div class="resource-monitors">
+            <ResourceMonitor mem-label="内存" :fetcher="fetchAppSelfResource" />
+            <ResourceMonitor cpu-label="系统CPU" mem-label="系统内存" :fetcher="fetchSystemResource" />
           </div>
         </template>
         <template #right
@@ -762,7 +763,24 @@ const loadNotificationDuration = async () => {
 
 // ---- Lifecycle ----
 // 资源监视数据源：桥接基础层 ResourceMonitor 到 toolApi（主进程 CPU/内存采样）
-const fetchAppResource = () => window.toolApi.getAppResource()
+// 资源监视:同一行显示应用自身与系统两组占用
+// 应用 CPU 按任务管理器全核归一化口径,内存为各进程工作集合计
+const formatMB = (bytes: number): string => {
+  const mb = bytes / 1024 / 1024
+  return mb >= 1024 ? `${(mb / 1024).toFixed(2)}GB` : `${mb.toFixed(0)}MB`
+}
+const fetchAppSelfResource = async () => {
+  const data = await window.toolApi.getAppResource()
+  const total = Number(data.appMemoryBytes) || 0
+  // 构成显示:专用求和 + 共享去重估算,真实物理占用
+  const memText = `${formatMB(total)}(专${formatMB(Number(data.appPrivateBytes) || 0)}+共${formatMB(Number(data.appSharedBytes) || 0)})`
+  return { cpu: data.appCpu, memRate: data.appMemRate, memText }
+}
+
+const fetchSystemResource = async () => {
+  const data = await window.toolApi.getAppResource()
+  return { cpu: data.cpu, memRate: data.memRate, memText: `${data.memory}GB(${data.memRate}%)` }
+}
 
 onMounted(async () => {
   // 主题初始化已下沉至基础层 ThemeSwitcher（内部 useTheme 在创建时应用持久化主题）
@@ -850,15 +868,21 @@ onUnmounted(() => {
   visibility: hidden;
 }
 
-.resource-monitor {
+.resource-monitors > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.resource-monitors {
   height: 100%;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
   background-color: transparent;
   color: var(--statusbar-text);
   font-size: 11px;
   padding: 0px 10px 0px 5px;
-  display: flex;
-  align-items: center;
-  width: fit-content;
+  width: 100%;
   user-select: none;
 }
 
