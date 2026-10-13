@@ -843,6 +843,9 @@
     "fieldBaud": "波特率",
     "connectHint": "连接ID 优先(应用内保存的连接);留空则按串口名直接连接",
     "fieldStopOnFail": "失败即停",
-    "runExternal": "在外部终端运行(Windows 控制台窗口)"
+    "runExternal": "在外部终端运行(Windows 控制台窗口)",
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "restore": "还原"
   }
 }

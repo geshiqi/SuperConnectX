@@ -87,6 +87,24 @@ export default class IpcTasks {
     // 标题栏按钮唤起
     ipcMain.on('palette:toggle', () => this.togglePalette())
 
+    // 面板窗口标准控件:最小化/最大化还原/关闭
+    ipcMain.handle('palette:minimize', () => {
+      this.paletteWindow?.minimize()
+      return { success: true }
+    })
+    ipcMain.handle('palette:toggle-maximize', () => {
+      const win = this.paletteWindow
+      if (!win || win.isDestroyed()) return { success: false }
+      if (win.isMaximized()) win.unmaximize()
+      else win.maximize()
+      return { success: true, maximized: win.isMaximized() }
+    })
+    ipcMain.handle('palette:close', () => {
+      this.paletteWindow?.close()
+      return { success: true }
+    })
+    ipcMain.handle('palette:is-maximized', () => this.paletteWindow?.isMaximized() ?? false)
+
     // 应用退出前停掉运行中的任务(杀 shell 子进程)
     app.on('before-quit', () => {
       this.runner.stop()
@@ -160,5 +178,13 @@ export default class IpcTasks {
     }
     win.on('resize', saveBounds)
     win.on('move', saveBounds)
+
+    // 最大化状态变化通知面板渲染层(切换按钮图标/提示)
+    const notifyMaximized = (): void => {
+      if (win.isDestroyed()) return
+      win.webContents.send('palette:maximized-changed', win.isMaximized())
+    }
+    win.on('maximize', notifyMaximized)
+    win.on('unmaximize', notifyMaximized)
   }
 }

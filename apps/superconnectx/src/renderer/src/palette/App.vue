@@ -1,11 +1,19 @@
 <template>
   <div class="palette">
-    <!-- 标题栏:拖拽区 + 关闭 -->
-    <div class="palette-titlebar">
+    <!-- 标题栏:拖拽区 + 窗口控件 -->
+    <div class="palette-titlebar" @dblclick="toggleMaximize">
       <div class="title-text">{{ t('palette.title') }}</div>
-      <button class="close-btn" :title="t('palette.close')" @click="closeWindow">
-        <el-icon :size="14"><Close /></el-icon>
-      </button>
+      <div class="titlebar-controls">
+        <button class="win-btn" :title="t('palette.minimize')" @click="minimizeWindow">
+          <el-icon :size="12"><Minus /></el-icon>
+        </button>
+        <button class="win-btn" :title="isMaximized ? t('palette.restore') : t('palette.maximize')" @click="toggleMaximize">
+          <el-icon :size="12"><FullScreen /></el-icon>
+        </button>
+        <button class="win-btn close-btn" :title="t('palette.close')" @click="closeWindow">
+          <el-icon :size="14"><Close /></el-icon>
+        </button>
+      </div>
     </div>
 
     <!-- 搜索框 -->
@@ -268,6 +276,19 @@ const closeWindow = (): void => {
   window.close()
 }
 
+// ===== 窗口控件:最小化/最大化还原/关闭 =====
+const isMaximized = ref(false)
+
+const minimizeWindow = (): void => {
+  window.paletteApi?.minimize()
+}
+
+const toggleMaximize = (): void => {
+  window.paletteApi?.toggleMaximize()
+}
+
+let removeMaximizedListener: (() => void) | null = null
+
 // ===== 输出区高度拖拽 =====
 const OUTPUT_HEIGHT_KEY = 'palette-output-height'
 const OUTPUT_MIN = 100
@@ -324,6 +345,10 @@ watch(filteredTasks, () => {
 
 onMounted(async () => {
   removeListener = window.taskApi.onTaskEvent(handleEvent)
+  removeMaximizedListener = window.paletteApi?.onMaximizedChanged?.((maximized) => {
+    isMaximized.value = maximized
+  }) ?? null
+  isMaximized.value = await window.paletteApi?.isMaximized?.()
   await loadTasks()
   // 恢复上次运行状态显示(应用重启后面板是独立会话,不恢复历史输出)
   isRunning.value = await window.taskApi.isRunning()
@@ -332,6 +357,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   removeListener?.()
+  removeMaximizedListener?.()
 })
 </script>
 
@@ -363,6 +389,33 @@ onUnmounted(() => {
   color: var(--text-white, #ccc);
 }
 
+.titlebar-controls {
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+
+.win-btn {
+  width: 30px;
+  height: 26px;
+  background: none;
+  border: none;
+  color: var(--text-white, #ccc);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.win-btn:hover {
+  background-color: var(--overlay-hover, #4a4a4d);
+}
+
+.win-btn.close-btn:hover {
+  background-color: var(--btn-close-hover, #e81123);
+  color: #fff;
+}
+
 .close-btn {
   width: 28px;
   height: 26px;
@@ -378,7 +431,7 @@ onUnmounted(() => {
 }
 
 .close-btn:hover {
-  background: var(--btn-close-hover, #e81123);
+  background-color: var(--btn-close-hover, #e81123);
   color: #fff;
 }
 

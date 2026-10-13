@@ -188,6 +188,11 @@ declare global {
     }
     paletteApi: {
       toggle: () => void
+      minimize: () => Promise<{ success: boolean }>
+      toggleMaximize: () => Promise<{ success: boolean; maximized?: boolean }>
+      close: () => Promise<{ success: boolean }>
+      isMaximized: () => Promise<boolean>
+      onMaximizedChanged: (callback: (maximized: boolean) => void) => () => void
     }
   }
 }

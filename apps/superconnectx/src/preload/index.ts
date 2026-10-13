@@ -221,5 +221,14 @@ contextBridge.exposeInMainWorld('taskApi', {
 contextBridge.exposeInMainWorld('paletteApi', {
   toggle: (): void => {
     ipcRenderer.send('palette:toggle')
+  },
+  minimize: (): Promise<{ success: boolean }> => ipcRenderer.invoke('palette:minimize'),
+  toggleMaximize: (): Promise<{ success: boolean; maximized?: boolean }> => ipcRenderer.invoke('palette:toggle-maximize'),
+  close: (): Promise<{ success: boolean }> => ipcRenderer.invoke('palette:close'),
+  isMaximized: (): Promise<boolean> => ipcRenderer.invoke('palette:is-maximized'),
+  onMaximizedChanged: (callback: (maximized: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, maximized: boolean): void => callback(maximized)
+    ipcRenderer.on('palette:maximized-changed', listener)
+    return () => ipcRenderer.removeListener('palette:maximized-changed', listener)
   }
 })

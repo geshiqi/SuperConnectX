@@ -843,6 +843,9 @@
     "fieldBaud": "Baud",
     "connectHint": "Conn ID takes precedence (saved connection); otherwise connects by COM name directly",
     "fieldStopOnFail": "Stop on fail",
-    "runExternal": "Run in external terminal (Windows console)"
+    "runExternal": "Run in external terminal (Windows console)",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore"
   }
 }
