@@ -11,13 +11,6 @@ import type { UserTask } from '../../shared/tasks/UserTask'
 
 const SAVE_DIR_NAME = 'userdata'
 
-export interface PaletteBounds {
-  x?: number
-  y?: number
-  width: number
-  height: number
-}
-
 export default class UserTaskStorage {
   private storageData: Store<any>
   private readonly STORAGE_NAME = 'user-tasks'
@@ -99,13 +92,4 @@ export default class UserTaskStorage {
     return { added, skipped }
   }
 
-  // ===== 面板窗口位置/尺寸记忆 =====
-
-  getPaletteBounds(): PaletteBounds | null {
-    return this.storageData.get('paletteBounds') || null
-  }
-
-  savePaletteBounds(bounds: PaletteBounds): void {
-    this.storageData.set('paletteBounds', bounds)
-  }
 }

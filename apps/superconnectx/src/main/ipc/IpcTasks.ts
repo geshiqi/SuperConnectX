@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { is } from '@electron-toolkit/utils'
 import UserTaskStorage from '../storage/UserTaskStorage'
+import WindowStateStorage, { isBoundsVisible } from '../storage/WindowStateStorage'
 import { TaskRunner, type TaskConnector } from '../tasks/TaskRunner'
 import IpcConnector from './IpcConnector'
 import logger from './IpcAppLogger'
@@ -18,6 +19,7 @@ const PALETTE_MIN_SIZE = { width: 420, height: 320 }
 export default class IpcTasks {
   private static sInstance: IpcTasks
   private storage = new UserTaskStorage()
+  private windowState = new WindowStateStorage()
   private runner = new TaskRunner()
   private paletteWindow: BrowserWindow | null = null
   private activeSessionId: string | null = null
@@ -153,13 +155,15 @@ export default class IpcTasks {
   }
 
   private createPaletteWindow(): void {
-    const saved = this.storage.getPaletteBounds()
+    // 窗口状态记忆:首次默认尺寸 + 最大化;之后按上次的大小/位置/是否最大化恢复
+    const saved = this.windowState.getWindowState('palette')
+    const useSaved = !!saved && isBoundsVisible(saved)
     const win = new BrowserWindow({
-      width: saved?.width || DEFAULT_PALETTE_BOUNDS.width,
-      height: saved?.height || DEFAULT_PALETTE_BOUNDS.height,
+      width: useSaved && saved ? saved.width : DEFAULT_PALETTE_BOUNDS.width,
+      height: useSaved && saved ? saved.height : DEFAULT_PALETTE_BOUNDS.height,
       minWidth: PALETTE_MIN_SIZE.width,
       minHeight: PALETTE_MIN_SIZE.height,
-      ...(saved?.x != null && saved?.y != null ? { x: saved.x, y: saved.y } : {}),
+      ...(useSaved && saved ? { x: saved.x, y: saved.y } : {}),
       title: 'Command Palette',
       frame: false,
       resizable: true,
@@ -181,8 +185,10 @@ export default class IpcTasks {
       win.loadFile(join(__dirname, '../../out/renderer/palette.html'))
     }
 
-    // 默认最大化打开;还原尺寸仍取记忆的 bounds(saveBounds 已跳过最大化状态)
-    win.maximize()
+    // 无记忆(首次)或上次就是最大化:打开时最大化
+    if (!useSaved || saved!.maximized) {
+      win.maximize()
+    }
 
     win.once('ready-to-show', () => {
       win.show()
@@ -192,14 +198,31 @@ export default class IpcTasks {
       if (this.paletteWindow === win) this.paletteWindow = null
     })
 
-    // 尺寸/位置记忆(仅保存正常状态,最大化/最小化不覆盖)
-    const saveBounds = (): void => {
-      if (win.isDestroyed() || win.isMinimized() || win.isMaximized() || win.isFullScreen()) return
-      const bounds = win.getBounds()
-      this.storage.savePaletteBounds({ x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height })
+    // 窗口状态记忆:防抖保存,close 时立即保存(最大化时记录还原基准 bounds + 标志)
+    let saveStateTimer: NodeJS.Timeout | null = null
+    const persistWindowState = (): void => {
+      if (win.isDestroyed() || win.isMinimized()) return
+      const normal = win.getNormalBounds()
+      this.windowState.saveWindowState('palette', {
+        x: normal.x,
+        y: normal.y,
+        width: normal.width,
+        height: normal.height,
+        maximized: win.isMaximized()
+      })
     }
-    win.on('resize', saveBounds)
-    win.on('move', saveBounds)
+    const schedulePersistWindowState = (): void => {
+      if (saveStateTimer) clearTimeout(saveStateTimer)
+      saveStateTimer = setTimeout(() => {
+        saveStateTimer = null
+        persistWindowState()
+      }, 500)
+    }
+    win.on('resize', schedulePersistWindowState)
+    win.on('move', schedulePersistWindowState)
+    win.on('maximize', schedulePersistWindowState)
+    win.on('unmaximize', schedulePersistWindowState)
+    win.on('close', persistWindowState)
 
     // 最大化状态变化通知面板渲染层(切换按钮图标/提示)
     const notifyMaximized = (): void => {

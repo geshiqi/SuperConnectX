@@ -7,6 +7,7 @@ import IpcTray from './IpcTray'
 import IpcConnector from './IpcConnector'
 import SettingsStorage from '../storage/SettingsStorage'
 import AppSettingsStorage from '../storage/AppSettingsStorage'
+import WindowStateStorage, { isBoundsVisible } from '../storage/WindowStateStorage'
 import BackupManager from '../utils/BackupManager'
 import fs from 'fs'
 import path from 'path'
@@ -44,11 +45,13 @@ export function getWindowCloseAction(
 export default class IpcMain {
   private static sInstance: IpcMain
   private settingsStorage: SettingsStorage
+  private windowStateStorage: WindowStateStorage
   private appSettingsStorage: AppSettingsStorage
 
   constructor() {
     this.settingsStorage = new SettingsStorage()
     this.appSettingsStorage = new AppSettingsStorage()
+    this.windowStateStorage = new WindowStateStorage()
   }
 
   static getInstance(): IpcMain {
@@ -60,11 +63,16 @@ export default class IpcMain {
   }
 
   init(_logger, windows): void {
+    const windowStateStorage = this.windowStateStorage
     function createWindow(): void {
+      // 窗口状态记忆:首次默认 1200x800 + 最大化;之后按上次的大小/位置/是否最大化恢复
+      const savedState = windowStateStorage.getWindowState('main')
+      const useSaved = !!savedState && isBoundsVisible(savedState)
       // 创建浏览器窗口
       const mainWindow = new BrowserWindow({
-        width: 1200, // 加宽（适配 SSH 终端和配置面板）
-        height: 800,
+        width: useSaved && savedState ? savedState.width : 1200, // 加宽（适配 SSH 终端和配置面板）
+        height: useSaved && savedState ? savedState.height : 800,
+        ...(useSaved && savedState ? { x: savedState.x, y: savedState.y } : {}),
         minWidth: 800, // 最小宽度（防止过窄）
         minHeight: 600, // 最小高度
         title: 'SuperConnectX',
@@ -87,8 +95,36 @@ export default class IpcMain {
         ...getWindowFrameOptions(process.platform)
       })
 
-      // 启动默认最大化(用户可还原,窗口尺寸仍以 1200x800 为还原基准)
-      mainWindow.maximize()
+      // 无记忆(首次)或上次就是最大化:启动最大化
+      if (!useSaved || savedState!.maximized) {
+        mainWindow.maximize()
+      }
+
+      // 记忆窗口状态:尺寸/位置变化防抖保存,close 时立即保存
+      let saveStateTimer: NodeJS.Timeout | null = null
+      const persistWindowState = (): void => {
+        if (mainWindow.isDestroyed() || mainWindow.isMinimized()) return
+        const normal = mainWindow.getNormalBounds()
+        windowStateStorage.saveWindowState('main', {
+          x: normal.x,
+          y: normal.y,
+          width: normal.width,
+          height: normal.height,
+          maximized: mainWindow.isMaximized()
+        })
+      }
+      const schedulePersistWindowState = (): void => {
+        if (saveStateTimer) clearTimeout(saveStateTimer)
+        saveStateTimer = setTimeout(() => {
+          saveStateTimer = null
+          persistWindowState()
+        }, 500)
+      }
+      mainWindow.on('resize', schedulePersistWindowState)
+      mainWindow.on('move', schedulePersistWindowState)
+      mainWindow.on('maximize', schedulePersistWindowState)
+      mainWindow.on('unmaximize', schedulePersistWindowState)
+      mainWindow.on('close', persistWindowState)
 
       // 渲染进程首帧就绪后再显示窗口
       mainWindow.once('ready-to-show', () => {
