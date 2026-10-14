@@ -263,6 +263,7 @@ export class TaskRunner {
   private async runShellBackground(step: TaskShellStep, options: RunOptions): Promise<StepResult> {
     const { file, args } = this.buildShellCommand(step)
     const encoding = step.encoding || 'utf8'
+    const isCmd = process.platform === 'win32' && (step.shell || 'cmd') === 'cmd'
     if (options.external) {
       options.emit({ kind: 'output', runId: '', stream: 'info', text: '后台模式使用隐藏进程执行,不弹外部窗口' })
     }
@@ -272,7 +273,9 @@ export class TaskRunner {
         child = spawn(file, args, {
           cwd: step.cwd || undefined,
           windowsHide: true,
-          shell: false
+          shell: false,
+          // 与前台一致:cmd.exe 不识别 spawn 默认的 \" 转义,原样传参(引号参数如 RTTSearchRanges 依赖此行为)
+          ...(isCmd ? { windowsVerbatimArguments: true } : {})
         })
       } catch (error) {
         return resolve({ success: false, message: `启动失败: ${(error as Error).message}` })
