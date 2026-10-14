@@ -20,6 +20,13 @@ export function formatReceivedData(content: string, showTimestamp: boolean, time
   return `${lines.map(line => `${prefix}${line}`).join('\n')}\n`
 }
 
+/** Constructs the sent-command echo line with ANSI highlight (color 36) for at-a-glance visibility. */
+export function buildSentEcho(displaySuffix: string, command: string): string {
+  const now = new Date()
+  const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`
+  return `\n\u001b[36m[${timestamp}] ${displaySuffix} ${command}\u001b[0m\n`
+}
+
 /** Loads persisted terminal display labels. */
 export async function loadTerminalDisplayText(): Promise<void> {
   try {
