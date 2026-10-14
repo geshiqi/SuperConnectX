@@ -669,7 +669,9 @@
     "exportSuccess": "数据导出成功",
     "exportFailed": "导出失败",
     "userTasks": "命令面板任务",
-    "userTasksDesc": "自定义任务(步骤流)"
+    "userTasksDesc": "自定义任务(步骤流)",
+    "scripts": "命令脚本",
+    "scriptsDesc": "命令面板引用的脚本文件(JLink 等)"
   },
   "importDialog": {
     "importSuccess": "数据导入成功",

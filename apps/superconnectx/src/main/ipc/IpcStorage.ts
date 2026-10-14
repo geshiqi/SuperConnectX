@@ -14,6 +14,8 @@ import IpcConnector from './IpcConnector'
 import BackupManager from '../utils/BackupManager'
 import AdmZip from 'adm-zip'
 import fs from 'fs'
+import path from 'path'
+import { getAppDataDir } from '../utils/AppDir'
 const archiver = require('archiver')
 import { STORAGE_IPC_CHANNELS } from '../../shared/ipc/storage'
 
@@ -335,6 +337,25 @@ async function exportDataToZip(
           data: new UserTaskStorage().getTasks()
         })
       }
+
+      if (selections.includes('scripts')) {
+        // 通用命令脚本目录(JLink 等命令引用的脚本文件),文件名 -> 文本内容
+        const scriptsDir = path.join(getAppDataDir(), 'userdata', 'scripts')
+        const payload: Record<string, string> = {}
+        if (fs.existsSync(scriptsDir)) {
+          for (const name of fs.readdirSync(scriptsDir)) {
+            const full = path.join(scriptsDir, name)
+            if (fs.statSync(full).isFile()) {
+              payload[name] = fs.readFileSync(full, 'utf8')
+            }
+          }
+        }
+        addJsonEntry('scripts.json', {
+          exportTime: new Date().toISOString(),
+          type: 'scripts',
+          data: payload
+        })
+      }
     } catch (err: any) {
       settle(err)
       return
@@ -508,6 +529,23 @@ async function importDataFromZip(
     logger.info(`[importDataFromZip] userTasks: ${added} added, ${skipped} skipped`)
   }
 
+  // ---- 7. scripts (覆盖写回通用脚本目录) ----
+  const scriptsData = readJsonEntry('scripts.json')
+  if (scriptsData?.data && typeof scriptsData.data === 'object' && !Array.isArray(scriptsData.data)) {
+    const scriptsDir = path.join(getAppDataDir(), 'userdata', 'scripts')
+    fs.mkdirSync(scriptsDir, { recursive: true })
+    let written = 0
+    for (const [name, content] of Object.entries(scriptsData.data as Record<string, unknown>)) {
+      if (typeof content !== 'string') continue
+      const safeName = path.basename(name)
+      if (!safeName || safeName === '.' || safeName === '..') continue
+      fs.writeFileSync(path.join(scriptsDir, safeName), content, 'utf8')
+      written++
+    }
+    result.scriptsImported = written
+    logger.info(`[importDataFromZip] scripts: ${written} files written`)
+  }
+
   // 检查是否至少有一类数据被导入
   const hasAnyData =
     result.settingsImported ||
@@ -515,7 +553,8 @@ async function importDataFromZip(
     result.groupsImported !== undefined ||
     result.commandsImported !== undefined ||
     result.connectionsImported !== undefined ||
-    result.userTasksImported !== undefined
+    result.userTasksImported !== undefined ||
+    result.scriptsImported !== undefined
 
   if (!hasAnyData) {
     return { __invalidFormat: true }

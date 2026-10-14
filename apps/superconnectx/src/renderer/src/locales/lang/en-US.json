@@ -669,7 +669,9 @@
     "exportSuccess": "Data exported successfully",
     "exportFailed": "Export failed",
     "userTasks": "Palette Tasks",
-    "userTasksDesc": "Custom tasks (step flows)"
+    "userTasksDesc": "Custom tasks (step flows)",
+    "scripts": "Command Scripts",
+    "scriptsDesc": "Script files referenced by palette tasks (JLink, etc.)"
   },
   "importDialog": {
     "importSuccess": "Data imported successfully",
