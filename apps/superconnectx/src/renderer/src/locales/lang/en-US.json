@@ -864,6 +864,9 @@
     "tabDropHint": "Click to switch; drop a task here to move it into this group",
     "enterMinimal": "Minimal mode (top bar)",
     "exitMinimal": "Exit minimal mode",
-    "minimalNoTasks": "No tasks in this group"
+    "minimalNoTasks": "No tasks in this group",
+    "deleteGroup": "Delete group (with tasks)",
+    "deleteGroupTitle": "Delete Group",
+    "deleteGroupConfirm": "Delete group \"{name}\"? All {count} tasks in it will be deleted!"
   }
 }

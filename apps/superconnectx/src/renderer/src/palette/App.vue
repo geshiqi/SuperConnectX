@@ -106,6 +106,11 @@
         >
           <span class="tab-name">{{ group.name || t('palette.groupUngrouped') }}</span>
           <span class="tab-count">{{ group.tasks.length }}</span>
+          <el-icon
+            class="tab-delete"
+            :title="t('palette.deleteGroup')"
+            @click.stop="deleteGroup(group)"
+          ><Close /></el-icon>
         </div>
       </div>
       <div v-if="currentTasks.length === 0" class="empty-hint">{{ t('palette.noTasks') }}</div>
@@ -540,6 +545,25 @@ const duplicateTask = async (task: UserTask): Promise<void> => {
   }
 }
 
+/** 删除组:连同组内全部任务一起删除(确认后执行) */
+const deleteGroup = async (group: { name: string; tasks: UserTask[] }): Promise<void> => {
+  const label = group.name || t('palette.groupUngrouped')
+  try {
+    await ElMessageBox.confirm(
+      t('palette.deleteGroupConfirm', { name: label, count: group.tasks.length }),
+      t('palette.deleteGroupTitle'),
+      { type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  for (const task of [...group.tasks]) {
+    const result = await window.taskApi.delete(task.id)
+    if (result.tasks) tasks.value = result.tasks
+  }
+  // 组已删空,选中回退由 taskGroups watcher 处理
+}
+
 const removeTask = async (task: UserTask): Promise<void> => {
   try {
     await ElMessageBox.confirm(t('palette.deleteConfirm', { name: task.name }), t('palette.deleteTitle'), {
@@ -920,6 +944,22 @@ onUnmounted(() => {
   border-radius: 8px;
   padding: 0 6px;
   font-size: 11px;
+}
+
+.tab-delete {
+  display: none;
+  font-size: 12px;
+  border-radius: 50%;
+  padding: 1px;
+}
+
+.group-tab:hover .tab-delete {
+  display: inline-flex;
+}
+
+.tab-delete:hover {
+  color: #f56c6c;
+  background: rgba(245, 108, 108, 0.2);
 }
 
 .group-tab.drop-hover {
