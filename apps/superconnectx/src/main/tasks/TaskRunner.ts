@@ -3,7 +3,7 @@
  * 顺序执行任务步骤(shell / 延时 / 内置动作),支持中止、stopOnFail、任务级重复。
  * 内置动作通过 IpcConnector 的会话接口完成(与 MCP 共用同一层,用户会话同样注册其中)。
  */
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
@@ -79,11 +79,25 @@ export class TaskRunner {
   stopBackgroundAll(): number {
     let count = 0
     for (const [, entry] of this.backgroundShells) {
-      this.killShell(entry.child)
+      this.killShellSync(entry.child)
       count++
     }
     this.backgroundShells.clear()
     return count
+  }
+
+  /** 同步杀进程树:应用退出路径专用 —— before-quit 里异步 spawn 的 taskkill 会在主进程退出前来不及执行,产生孤儿进程 */
+  private killShellSync(child: ChildProcess): void {
+    if (child.pid == null) return
+    if (process.platform === 'win32') {
+      try {
+        spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true })
+      } catch { /* ignore */ }
+    } else {
+      try {
+        child.kill('SIGKILL')
+      } catch { /* ignore */ }
+    }
   }
 
   async run(task: UserTask, options: RunOptions): Promise<{ success: boolean; aborted: boolean }> {
