@@ -197,6 +197,9 @@
           <el-button v-if="isRunning" size="small" type="danger" @click="stopRun">
             <el-icon style="margin-right: 3px"><VideoPause /></el-icon>{{ t('palette.stop') }}
           </el-button>
+          <el-button size="small" text :disabled="outputLines.length === 0" @click="copyOutput">
+            <el-icon style="margin-right: 3px"><CopyDocument /></el-icon>{{ t('palette.copy') }}
+          </el-button>
           <el-button size="small" text @click="clearOutput">{{ t('palette.clear') }}</el-button>
         </div>
       </div>
@@ -521,6 +524,17 @@ const stopBackground = async (): Promise<void> => {
     appendOutput(`${t('palette.backgroundStopped', { count: result.stopped })}`, 'info')
   }
   await refreshBackground()
+}
+
+/** 复制全部输出到剪贴板 */
+const copyOutput = async (): Promise<void> => {
+  const text = outputLines.value.map((line) => line.text).join('\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    appendOutput(t('palette.copied'), 'info')
+  } catch {
+    appendOutput(t('palette.copyFailed'), 'stderr')
+  }
 }
 
 const clearOutput = (): void => {
@@ -1087,6 +1101,16 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 6px 12px;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text;
+}
+
+/* 覆盖全局 * 选择器的 none!important:输出区所有后代行都允许选中 */
+.output-body *,
+.output-body .output-line {
+  user-select: text !important;
+  -webkit-user-select: text !important;
   font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.5;

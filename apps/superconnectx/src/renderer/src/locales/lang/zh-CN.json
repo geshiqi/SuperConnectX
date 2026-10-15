@@ -867,6 +867,9 @@
     "minimalNoTasks": "当前组无任务",
     "deleteGroup": "删除组(连同任务)",
     "deleteGroupTitle": "删除组",
-    "deleteGroupConfirm": "确定删除组「{name}」?组内 {count} 个任务将一并删除!"
+    "deleteGroupConfirm": "确定删除组「{name}」?组内 {count} 个任务将一并删除!",
+    "copy": "复制",
+    "copied": "已复制到剪贴板",
+    "copyFailed": "复制失败"
   }
 }

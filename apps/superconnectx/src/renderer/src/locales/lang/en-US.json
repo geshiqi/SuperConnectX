@@ -867,6 +867,9 @@
     "minimalNoTasks": "No tasks in this group",
     "deleteGroup": "Delete group (with tasks)",
     "deleteGroupTitle": "Delete Group",
-    "deleteGroupConfirm": "Delete group \"{name}\"? All {count} tasks in it will be deleted!"
+    "deleteGroupConfirm": "Delete group \"{name}\"? All {count} tasks in it will be deleted!",
+    "copy": "Copy",
+    "copied": "Copied to clipboard",
+    "copyFailed": "Copy failed"
   }
 }
