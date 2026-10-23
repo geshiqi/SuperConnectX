@@ -24,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 
@@ -89,8 +89,8 @@ const getOriginalConnectionId = (): number | undefined => {
   return parts.length >= 1 ? parseInt(parts[0], 10) : undefined
 }
 
-// 加载字体设置
-const loadFontSettings = async () => {
+// 加载连接级设置（字体 + 发送区开关）
+const loadConnectionSettings = async () => {
   try {
     const originalId = getOriginalConnectionId()
     if (originalId) {
@@ -106,26 +106,43 @@ const loadFontSettings = async () => {
           unifiedTerminalRef.value?.setFontFamily?.(conn.fontFamily)
           emit('fontLoaded', conn.fontFamily)
         }
+        // 发送区开关（CRLF/HEX/CRC）按连接持久化，对齐串口行为
+        if (conn.autoNewline !== undefined) {
+          unifiedTerminalRef.value?.setAutoNewline?.(conn.autoNewline)
+        }
+        if (conn.hexMode !== undefined) {
+          unifiedTerminalRef.value?.setHexMode?.(conn.hexMode)
+        }
+        if (conn.crcEnabled !== undefined) {
+          unifiedTerminalRef.value?.setCrcEnabled?.(conn.crcEnabled)
+        }
+        if (conn.crcMethod !== undefined) {
+          unifiedTerminalRef.value?.setCrcMethod?.(conn.crcMethod)
+        }
       }
     }
   } catch (error) {
-    console.error('Failed to load font settings:', error)
+    console.error('Failed to load connection settings:', error)
   }
 }
 
-// 保存字体设置
-const saveFontSettings = async () => {
+// 保存连接级设置（字体 + 发送区开关）
+const saveConnectionSettings = async () => {
   try {
     const originalId = getOriginalConnectionId()
     if (originalId) {
       await window.storageApi.updateConnection({
         id: originalId,
         fontSize: terminal.fontSize.value,
-        fontFamily: terminal.fontFamily.value
+        fontFamily: terminal.fontFamily.value,
+        autoNewline: unifiedTerminalRef.value?.getAutoNewline?.(),
+        hexMode: unifiedTerminalRef.value?.getHexMode?.(),
+        crcEnabled: unifiedTerminalRef.value?.getCrcEnabled?.(),
+        crcMethod: unifiedTerminalRef.value?.getCrcMethod?.()
       })
     }
   } catch (error) {
-    console.error('Failed to save font settings:', error)
+    console.error('Failed to save connection settings:', error)
   }
 }
 
@@ -137,7 +154,22 @@ const terminal = useTerminal({
   isConnecting,
   connectionType: 'telnet',
   sendDisplaySuffix: 'SEND >>>>>>>>>>>',
-  saveFontSettings
+  saveFontSettings: saveConnectionSettings
+})
+
+// 发送区开关变化即保存。首次挂载的 undefined->默认值 过渡不保存，
+// 避免默认值抢在 loadConnectionSettings 之前覆盖已存配置
+watch(() => unifiedTerminalRef.value?.getAutoNewline?.(), (newVal, oldVal) => {
+  if (newVal !== undefined && oldVal !== undefined) saveConnectionSettings()
+})
+watch(() => unifiedTerminalRef.value?.getHexMode?.(), (newVal, oldVal) => {
+  if (newVal !== undefined && oldVal !== undefined) saveConnectionSettings()
+})
+watch(() => unifiedTerminalRef.value?.getCrcEnabled?.(), (newVal, oldVal) => {
+  if (newVal !== undefined && oldVal !== undefined) saveConnectionSettings()
+})
+watch(() => unifiedTerminalRef.value?.getCrcMethod?.(), (newVal, oldVal) => {
+  if (newVal !== undefined && oldVal !== undefined) saveConnectionSettings()
 })
 
 const { openLogFolder, openLogFile, saveLogFileAs, rotateLogFile, cleanup: terminalCleanup } = terminal
@@ -341,7 +373,7 @@ const connect = async () => {
         isConnected.value = true
         isConnecting.value = false
 
-        loadFontSettings()
+        loadConnectionSettings()
         const connType = props.connection.connectionType
         const updateConn: any = {
           connectionType: connType,

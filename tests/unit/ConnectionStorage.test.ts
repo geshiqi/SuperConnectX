@@ -230,6 +230,29 @@ describe('ConnectionStorage', () => {
       expect(conn!.ftpDirectory).toBe('/home/ftp')
       expect(conn!.ftpPermissions).toEqual(['get', 'put'])
     })
+
+    it('更新发送区开关字段（CRLF/HEX/CRC），未传字段保留原值', () => {
+      const added = storage.add({ name: 'Tg', connectionType: 'telnet', host: 'h', port: 1 })
+      storage.update({
+        id: added.id,
+        autoNewline: false,
+        hexMode: true,
+        crcEnabled: false,
+        crcMethod: 'CRC-16/CCITT'
+      })
+      const conn = storage.getByIdWithPassword(added.id)
+      expect(conn!.autoNewline).toBe(false)
+      expect(conn!.hexMode).toBe(true)
+      expect(conn!.crcEnabled).toBe(false)
+      expect(conn!.crcMethod).toBe('CRC-16/CCITT')
+
+      // 只更新其中一项，其余保留
+      storage.update({ id: added.id, crcEnabled: true })
+      const conn2 = storage.getByIdWithPassword(added.id)
+      expect(conn2!.crcEnabled).toBe(true)
+      expect(conn2!.autoNewline).toBe(false)
+      expect(conn2!.crcMethod).toBe('CRC-16/CCITT')
+    })
   })
 
   describe('delete', () => {

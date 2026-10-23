@@ -227,6 +227,19 @@ export default class ConnectionStorage extends BaseStorage {
     if (conn.fontFamily !== undefined) {
       con[0].fontFamily = conn.fontFamily
     }
+    // 发送区开关（CRLF/HEX/CRC），由终端运行时按连接持久化，对齐串口的 ComSettings 行为
+    if (conn.autoNewline !== undefined) {
+      con[0].autoNewline = conn.autoNewline
+    }
+    if (conn.hexMode !== undefined) {
+      con[0].hexMode = conn.hexMode
+    }
+    if (conn.crcEnabled !== undefined) {
+      con[0].crcEnabled = conn.crcEnabled
+    }
+    if (conn.crcMethod !== undefined) {
+      con[0].crcMethod = conn.crcMethod
+    }
 
     this.saveAll(connections as never[])
     logger.info(`update connection ${conn.host}:${conn.port}`)
