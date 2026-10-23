@@ -415,7 +415,8 @@ const handleSend = async (command: string, originalInput?: string) => {
     }))
     await window.connectApi.sendData({
       conn: connObj,
-      command: command.trim()
+      // 不 trim:二进制字符串(HEX 模式)首尾的 0D 0A 20 等会被 trim 当空白吃掉
+      command
     })
   } catch (error) {
     ElMessage.error(t('terminal.commandSendFailed'))

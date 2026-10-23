@@ -236,7 +236,8 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
     }
 
     try {
-      await window.connectApi.sendData({ conn: getConnectionIpcPayload(), command: command.trim() })
+      // 不 trim:二进制字符串(HEX 模式)首尾的 0D 0A 20 等会被 trim 当空白吃掉
+      await window.connectApi.sendData({ conn: getConnectionIpcPayload(), command })
     } catch (error) {
       ElMessage.error(t('terminal.commandSendFailed'))
       console.error('Failed to send:', error)
