@@ -373,7 +373,6 @@ const connect = async () => {
         isConnected.value = true
         isConnecting.value = false
 
-        loadConnectionSettings()
         const connType = props.connection.connectionType
         const updateConn: any = {
           connectionType: connType,
@@ -535,6 +534,10 @@ onBeforeUnmount(() => {
 })
 
 onMounted(() => {
+  // 连接级设置随挂载恢复（与串口 onMounted 行为一致），不依赖连接成功：
+  // 否则 RTT 等服务后启动的场景，重启应用后连接还在重试，开关长时间停留在默认值，
+  // 看起来就像"没有持久化"。会话内变化已即时保存，无需在重连时再次恢复
+  loadConnectionSettings()
   if (props.autoConnect) {
     connect()
   }
