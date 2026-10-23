@@ -2,7 +2,7 @@ import { ref, watch, onUnmounted, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { getDefaultTerminalFont } from '../../utils/FontDetector'
-import { buildSentEcho, sendDisplayText as sendDisplayTextStore } from './useTerminalDisplayText'
+import { buildWireHexEcho,  buildSentEcho, sendDisplayText as sendDisplayTextStore } from './useTerminalDisplayText'
 
 /** A SuperConnectX connection opened by a terminal session. */
 export interface TerminalConnection {
@@ -227,6 +227,7 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
 
     const displaySuffix = sendDisplayTextStore.value || sendDisplaySuffix
     unifiedTerminalRef.value?.appendToTerminal(buildSentEcho(displaySuffix, command))
+    unifiedTerminalRef.value?.appendToTerminal(buildWireHexEcho(command))
     totalTxSize += command.length
     unifiedTerminalRef.value?.updateTxBytes(command.length)
 

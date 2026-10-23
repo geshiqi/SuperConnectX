@@ -27,6 +27,20 @@ export function buildSentEcho(displaySuffix: string, command: string): string {
   return `\n\u001b[36m[${timestamp}] ${displaySuffix} ${command}\u001b[0m\n`
 }
 
+/** Wire-level hex dump: actual bytes sent (incl. CRLF/CRC), formatted like buildSentEcho with timestamp + ANSI highlight */
+export function buildWireHexEcho(command: string): string {
+  if (!command || command.length === 0) return ''
+  const hexBytes: string[] = []
+  for (let i = 0; i < command.length; i++) {
+    hexBytes.push(command.charCodeAt(i).toString(16).padStart(2, '0').toUpperCase())
+  }
+  const now = new Date()
+  const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`
+  return `
+[36m[${timestamp}] HEX>> ${hexBytes.join(' ')} (${hexBytes.length}B)[0m
+`
+}
+
 /** Loads persisted terminal display labels. */
 export async function loadTerminalDisplayText(): Promise<void> {
   try {

@@ -32,7 +32,7 @@ const { t } = useI18n()
 import UnifiedTerminal from './UnifiedTerminal.vue'
 import { fromRawConnection } from '../../features/connections/protocol'
 import { useTerminal } from './useTerminal'
-import { buildSentEcho, formatReceivedData, recvDisplayText, sendDisplayText } from './useTerminalDisplayText'
+import { buildSentEcho, buildWireHexEcho, formatReceivedData, recvDisplayText, sendDisplayText } from './useTerminalDisplayText'
 
 const MAX_RETRY_COUNT = 1000
 const RETRY_INTERVAL_MS = 3000
@@ -403,6 +403,7 @@ const handleSend = async (command: string, originalInput?: string) => {
   // 发送回显(与串口终端一致,带 ANSI 高亮):HEX 模式下显示原始 hex 输入而非二进制串
   const displayCommand = originalInput ?? command
   unifiedTerminalRef.value?.appendToTerminal(buildSentEcho(sendDisplayText.value, displayCommand))
+  unifiedTerminalRef.value?.appendToTerminal(buildWireHexEcho(command))
 
   terminal.totalTxSize += command.length
   unifiedTerminalRef.value?.updateTxBytes(command.length)

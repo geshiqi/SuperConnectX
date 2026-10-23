@@ -181,7 +181,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import UnifiedTerminal from './UnifiedTerminal.vue'
 import { useTerminal } from './useTerminal'
 import { getDefaultTerminalFont } from '../../utils/FontDetector'
-import { buildSentEcho, formatReceivedData, sendDisplayText, recvDisplayText } from './useTerminalDisplayText'
+import { buildSentEcho, buildWireHexEcho, formatReceivedData, sendDisplayText, recvDisplayText } from './useTerminalDisplayText'
 
 const { t } = useI18n()
 
@@ -744,6 +744,7 @@ const handleSendCommand = async (command: string, originalInput?: string) => {
 
   // 显示发送内容
   unifiedTerminalRef.value?.appendToTerminal(buildSentEcho(sendDisplayText.value, displayCommand))
+  unifiedTerminalRef.value?.appendToTerminal(buildWireHexEcho(command))
 
   try {
     await window.connectApi.sendData({

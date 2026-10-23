@@ -77,6 +77,7 @@
         :crc-method="crcMethod"
         ref="presetCommandsRef"
         @commandSent="handleCommandSent"
+        @sendViaTerminal="(cmd: string) => { currentCommand = cmd; handleSendCommand() }"
         @commandSentContent="(content: string, byteLength?: number) => appendCommandToTerminal(content, byteLength)"
         @openCommandEditor="(connectionType: string) => emit('onOpenCommandEditor', connectionType)"
       />
@@ -214,7 +215,7 @@ import { getMonacoTheme } from '../../utils/MonacoTheme'
 import { getDefaultTerminalFont } from '../../utils/FontDetector'
 import { TOOLTIP_SHOW_AFTER } from '../../utils/constants'
 import { calculateTerminalSplitRatio } from '../../utils/TerminalSplitLayout'
-import { sendDisplayText } from './useTerminalDisplayText'
+import { buildSentEcho, sendDisplayText } from './useTerminalDisplayText'
 import { useTerminalPanelLayout } from './useTerminalPanelLayout'
 import {
   isValidHex,
@@ -1268,9 +1269,7 @@ const parseHexString = (hex: string): string | null => {
 }
 
 const appendCommandToTerminal = (content: string, byteLength?: number) => {
-  const now = new Date()
-  const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`
-  appendToTerminal(`\n[${timestamp}] ${sendDisplayText.value} ${content}\n`)
+  appendToTerminal(buildSentEcho(sendDisplayText.value, content))
   totalTxSize += byteLength !== undefined ? byteLength : content.length
   txBytes.value = formatBytes(totalTxSize)
 }
@@ -1319,6 +1318,10 @@ const getEditorContent = (): string => {
 // 暴露给父组件的方法
 defineExpose({
   appendToTerminal,
+  sendFromPreset: (rawCommand: string) => {
+    currentCommand.value = rawCommand
+    handleSendCommand()
+  },
   updateRxBytes,
   updateTxBytes,
   resetRxTx,
