@@ -16,7 +16,6 @@ export default class FormUtils {
   static buildGroupData() {
     return ref({
       name: '',
-      connectionType: 'telnet',
       copyFromGroupId: null
     })
   }

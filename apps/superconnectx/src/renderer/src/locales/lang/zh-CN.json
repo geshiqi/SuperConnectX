@@ -465,8 +465,6 @@
     "editGroup": "编辑命令组",
     "groupName": "命令组名称",
     "groupNamePlaceholder": "命令组名称",
-    "connectionType": "连接类型",
-    "selectConnectionType": "选择连接类型",
     "copyGroup": "拷贝命令组",
     "copyGroupHint": "复制该组下的所有命令到新组",
     "save": "保存",

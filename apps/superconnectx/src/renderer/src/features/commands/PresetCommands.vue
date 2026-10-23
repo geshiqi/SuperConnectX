@@ -117,13 +117,6 @@
         <el-form-item :label="t('presetCommands.groupName')" prop="name">
           <el-input v-model="groupForm.name" :placeholder="t('presetCommands.groupNamePlaceholder')" />
         </el-form-item>
-        <el-form-item :label="t('presetCommands.connectionType')" prop="connectionType">
-          <el-select v-model="groupForm.connectionType" :placeholder="t('presetCommands.selectConnectionType')">
-            <el-option label="Telnet" value="telnet" />
-            <el-option label="SSH" value="ssh" disabled />
-            <el-option label="FTP" value="ftp" />
-          </el-select>
-        </el-form-item>
 
         <el-form-item :label="t('presetCommands.copyGroup')" v-if="!isEditingGroup">
           <el-select v-model="groupForm.copyFromGroupId" placeholder="（可选）" clearable>
@@ -343,10 +336,8 @@ const saveProtocolValue = async (key: string, value: number | null) => {
 }
 
 const copyableGroups = computed(() => {
-  const connType = props.connection?.connectionType || 'telnet'
   return groups.value.filter(
-    (group) =>
-      group.groupId !== currentEditingGroup.value?.groupId && group.connectionType === connType
+    (group) => group.groupId !== currentEditingGroup.value?.groupId
   )
 })
 
@@ -419,7 +410,7 @@ const loadGroups = async () => {
   try {
     const savedGroups = await window.storageApi.getCommandGroups()
     groups.value = Array.isArray(savedGroups) ? savedGroups : []
-    filterGroupsByConnectionType()
+    syncFilteredGroups()
 
     // 尝试恢复上次选中的分组（按协议类型）
     let restored = false
@@ -451,12 +442,9 @@ const loadGroups = async () => {
   }
 }
 
-// 根据连接类型过滤组
-const filterGroupsByConnectionType = () => {
-  const connType = props.connection?.connectionType || 'telnet'
-  filteredGroups.value = groups.value.filter((group) => group.connectionType === connType)
-  console.log(`filteredGroups`, JSON.stringify(filteredGroups.value))
-  // 如果当前选中的组不在过滤列表中，清除选中状态
+// 命令组全局共用，不再按连接类型过滤；仅当选中组已不存在时清除选中状态
+const syncFilteredGroups = () => {
+  filteredGroups.value = groups.value
   if (
     selectedGroupId.value &&
     !filteredGroups.value.some((g) => g.groupId === selectedGroupId.value)
@@ -510,7 +498,6 @@ const openAddGroupDialog = () => {
   currentEditingGroup.value = null
   groupForm.value = {
     name: '',
-    connectionType: props.connection?.connectionType || 'telnet',
     copyFromGroupId: null
   }
   isGroupDialogOpen.value = true
@@ -522,7 +509,6 @@ const editGroup = (group: any) => {
   currentEditingGroup.value = group
   groupForm.value = {
     name: group.name,
-    connectionType: group.connectionType,
     copyFromGroupId: null
   }
   isGroupDialogOpen.value = true
@@ -583,8 +569,7 @@ const saveGroup = async () => {
     await groupFormRef.value.validate()
 
     const groupData = {
-      name: groupForm.value.name.trim(),
-      connectionType: groupForm.value.connectionType
+      name: groupForm.value.name.trim()
     }
 
     if (isEditingGroup.value && currentEditingGroup.value) {
@@ -771,37 +756,6 @@ defineExpose({
   refreshGroupsCmds
 })
 
-watch(
-  () => props.connection?.connectionType,
-  async () => {
-    filterGroupsByConnectionType()
-    // 协议类型变化时，尝试恢复该协议上次选中的分组
-    let restored = false
-    try {
-      const appSettings = await window.storageApi.getAppSettings()
-      const savedId = getProtocolValue(appSettings, 'commandEditorSelectedGroupId')
-      if (savedId != null && filteredGroups.value.some(g => g.groupId === savedId)) {
-        selectedGroupId.value = savedId
-        const selected = groups.value.find((g) => g.groupId === selectedGroupId.value)
-        if (selected) {
-          selectedGroupName.value = selected.name
-        }
-        restored = true
-        filterCommandsByGroup()
-      }
-    } catch {
-      // ignore
-    }
-    // 如果没有恢复成功，选中第一个分组
-    if (!restored && filteredGroups.value.length > 0 && !selectedGroupId.value) {
-      const firstGroup = filteredGroups.value[0]
-      selectedGroupId.value = firstGroup.groupId
-      selectedGroupName.value = firstGroup.name
-      filterCommandsByGroup()
-    }
-  }
-)
-
 watch(selectedGroupId, () => {
   filterCommandsByGroup()
 })
@@ -870,29 +824,23 @@ onBeforeUnmount(() => {
   isRunningAll.value = false
 })
 
-// 处理命令组变化事件
-const handleCommandGroupsChanged = (connectionType: string) => {
-  // 只刷新当前协议类型的分组
-  if (props.connection?.connectionType === connectionType) {
-    const prevSelectedId = selectedGroupId.value
-    loadGroups().then(() => {
-      // 如果之前有选中的组，刷新后同步组名称
-      if (prevSelectedId) {
-        const updatedGroup = groups.value.find((g) => g.groupId === prevSelectedId)
-        if (updatedGroup) {
-          selectedGroupName.value = updatedGroup.name
-        }
+// 处理命令组变化事件（命令组全局共用，任何连接下的变化都刷新）
+const handleCommandGroupsChanged = () => {
+  const prevSelectedId = selectedGroupId.value
+  loadGroups().then(() => {
+    // 如果之前有选中的组，刷新后同步组名称
+    if (prevSelectedId) {
+      const updatedGroup = groups.value.find((g) => g.groupId === prevSelectedId)
+      if (updatedGroup) {
+        selectedGroupName.value = updatedGroup.name
       }
-    })
-  }
+    }
+  })
 }
 
-// 处理预设命令变化事件
-const handlePresetCommandsChanged = (connectionType: string) => {
-  // 只刷新当前协议类型的命令
-  if (props.connection?.connectionType === connectionType) {
-    loadPresetCommands()
-  }
+// 处理预设命令变化事件（命令全局共用，任何连接下的变化都刷新）
+const handlePresetCommandsChanged = () => {
+  loadPresetCommands()
 }
 </script>
 

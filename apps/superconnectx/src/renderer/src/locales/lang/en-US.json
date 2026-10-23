@@ -465,8 +465,6 @@
     "editGroup": "Edit Group",
     "groupName": "Group Name",
     "groupNamePlaceholder": "Group Name",
-    "connectionType": "Connection Type",
-    "selectConnectionType": "Select Connection Type",
     "copyGroup": "Copy Group",
     "copyGroupHint": "Copy all commands in this group to a new group",
     "save": "Save",

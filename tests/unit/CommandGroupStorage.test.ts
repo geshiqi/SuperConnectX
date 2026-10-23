@@ -35,6 +35,14 @@ describe('CommandGroupStorage', () => {
       const all = storage.getAll()
       expect(all.length).toBe(2)
     })
+
+    it('不传 connectionType 时默认存 all（命令组全局共用）', () => {
+      const g = storage.add({ name: 'Global' })
+      expect(g!.connectionType).toBe('all')
+
+      const updated = storage.update({ groupId: g!.groupId, name: 'Global2' })
+      expect(updated!.connectionType).toBe('all')
+    })
   })
 
   describe('update', () => {

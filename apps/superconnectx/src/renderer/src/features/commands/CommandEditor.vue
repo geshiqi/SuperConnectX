@@ -160,7 +160,6 @@ const { t } = useI18n()
 interface CommandGroup {
   groupId: number
   name: string
-  connectionType: string
 }
 
 const props = withDefaults(defineProps<{
@@ -203,17 +202,14 @@ const onGroupDialogOpened = () => {
 }
 
 const groupForm = reactive({
-  name: '',
-  connectionType: 'telnet'
+  name: ''
 })
 
 const filteredGroups = computed(() => {
-  // 先按协议类型过滤
-  let filtered = groups.value.filter(g => g.connectionType === props.connectionType)
-  // 再按搜索关键词过滤
-  if (!searchKeyword.value) return filtered
+  // 命令组全局共用，仅按搜索关键词过滤
+  if (!searchKeyword.value) return groups.value
   const keyword = searchKeyword.value.toLowerCase()
-  return filtered.filter(g => g.name.toLowerCase().includes(keyword))
+  return groups.value.filter(g => g.name.toLowerCase().includes(keyword))
 })
 
 // 辅助函数：从 AppSettings 中获取按协议存储的值，兼容旧格式
@@ -401,13 +397,11 @@ const saveGroup = async () => {
     if (isEditingGroup.value && editingGroupId.value) {
       await window.storageApi.updateCommandGroup({
         groupId: editingGroupId.value,
-        name: groupForm.name,
-        connectionType: groupForm.connectionType
+        name: groupForm.name
       })
     } else {
       await window.storageApi.addCommandGroup({
-        name: groupForm.name,
-        connectionType: groupForm.connectionType
+        name: groupForm.name
       })
     }
     showGroupDialog.value = false
@@ -424,7 +418,6 @@ const editGroup = (group: CommandGroup) => {
   isEditingGroup.value = true
   editingGroupId.value = group.groupId
   groupForm.name = group.name
-  groupForm.connectionType = group.connectionType
   showGroupDialog.value = true
 }
 
@@ -530,7 +523,6 @@ const deleteCommand = async (command: PresetCommand) => {
 
 const resetGroupForm = () => {
   groupForm.name = ''
-  groupForm.connectionType = props.connectionType
   isEditingGroup.value = false
   editingGroupId.value = null
 }

@@ -10,14 +10,15 @@ export default class CommandGroupStorage extends BaseStorage {
     })
   }
 
-  add(group: { name: string; connectionType: string }) {
+  // 命令组全局共用，connectionType 仅旧数据兼容保留，新组统一存 'all'
+  add(group: { name: string; connectionType?: string }) {
     try {
       const groups = this.getAll()
       const newId = groups.length ? Math.max(...groups.map((g) => g.groupId)) + 1 : 1
       const newGroup = {
         groupId: newId,
         name: group.name.trim(),
-        connectionType: group.connectionType
+        connectionType: group.connectionType || 'all'
       }
       groups.push(newGroup)
       this.saveAll(groups)
@@ -29,7 +30,7 @@ export default class CommandGroupStorage extends BaseStorage {
     }
   }
 
-  update(group: { groupId: number; name: string; connectionType: string }) {
+  update(group: { groupId: number; name: string; connectionType?: string }) {
     try {
       const groups = this.getAll()
       const index = groups.findIndex((g) => g.groupId === group.groupId)
@@ -40,7 +41,7 @@ export default class CommandGroupStorage extends BaseStorage {
       groups[index] = {
         groupId: group.groupId,
         name: group.name.trim(),
-        connectionType: group.connectionType
+        connectionType: group.connectionType || 'all'
       }
       this.saveAll(groups)
       logger.info(`update group "${group.name}" groupId: ${group.groupId}`)

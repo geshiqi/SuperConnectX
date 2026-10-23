@@ -31,7 +31,6 @@ describe('FormUtils', () => {
       expect(result).toBeDefined()
       expect(result.value).toEqual({
         name: '',
-        connectionType: 'telnet',
         copyFromGroupId: null
       })
     })
