@@ -33,6 +33,17 @@ vi.mock('telnet-client', () => {
       // simulate send
     }
 
+    // 模拟 socket:TelnetClient 绕过 telnet-client 的 send()/write() 直接写 socket(见 TelnetClient.send)
+    socket = {
+      writable: true,
+      written: [] as Buffer[],
+      write: (data: Buffer, cb?: (err?: Error | null) => void) => {
+        this.socket.written.push(Buffer.from(data))
+        cb?.(null)
+        return true
+      }
+    }
+
     destroy(): void {
       // simulate destroy
     }
@@ -245,11 +256,12 @@ describe('TelnetClient', () => {
         vi.fn(), vi.fn(), vi.fn()
       )
       const connection = client.telnetConnections.get('gbk')!
-      const sendSpy = vi.spyOn(connection, 'send')
 
       await client.send('gbk', '中文命令', vi.fn())
 
-      expect(sendSpy).toHaveBeenCalledWith(iconv.encode('中文命令\n', 'gbk'))
+      // 直写 socket,按连接编码落线;换行由渲染层 CRLF 开关决定,不再强加 \n
+      expect(connection.socket.written).toHaveLength(1)
+      expect(connection.socket.written[0]).toEqual(iconv.encode('中文命令', 'gbk'))
     })
   })
 
