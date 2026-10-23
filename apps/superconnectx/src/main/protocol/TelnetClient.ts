@@ -1,4 +1,5 @@
 import { Telnet } from 'telnet-client'
+import type { Socket } from 'net'
 import BaseClient, { ILogger } from './BaseClient'
 import ConnectionInfo from './ConnectionInfo'
 import { BufferLineSplitter } from './BufferLineSplitter'
@@ -176,7 +177,20 @@ export default class TelnetClient extends BaseClient {
       const encoding = this.connectionInfos.get(connId)?.encoding || 'utf8'
       // 二进制逐字节写入(latin1 1:1 映射 charCode),绕过文本编码避免高字节被 utf8 重编码损坏
       const payload: Buffer = isBinary ? Buffer.from(command, 'latin1') : iconv.encode(command, encoding)
-      await connection.send(payload)
+
+      // 不能走 telnet-client 的 send():其内部 `data += opts.ors` 会把 Buffer 隐式 toString('utf8'),
+      // 高字节(如 0xFF)被替换为 U+FFFD 后以 EF BF BD 落到线上,且 ors 默认 '\n' 会强追加换行;
+      // 公开的 write() 虽不转码但要等对端响应,静默设备 2s 后误报失败。终端发送是纯流式,直接写 socket
+      // 不能走 telnet-client 的 send():其内部 `data += opts.ors` 会把 Buffer 隐式 toString('utf8'),
+      // 高字节(如 0xFF)被替换为 U+FFFD 后以 EF BF BD 落到线上,且 ors 默认 '\n' 会强追加换行;
+      // 公开的 write() 虽不转码但要等对端响应,静默设备 2s 后误报失败。终端发送是纯流式,直接写 socket
+      const socket = (connection as unknown as { socket?: Socket }).socket
+      if (!socket || !socket.writable) {
+        return { success: false, message: 'socket not writable' }
+      }
+      await new Promise<void>((resolve, reject) => {
+        socket.write(payload, (err) => (err ? reject(err) : resolve()))
+      })
       onComplete?.(dataStr)
 
       this.logger.info(`send command: ${logCommand}`)
