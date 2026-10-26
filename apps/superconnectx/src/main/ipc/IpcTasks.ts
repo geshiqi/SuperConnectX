@@ -2,7 +2,7 @@
  * 命令面板:任务 CRUD / 运行控制 IPC + 面板窗口管理。
  * 面板 = 独立无边框 BrowserWindow,尺寸/位置记忆,单例,toggle 显隐。
  */
-import { BrowserWindow, ipcMain, app } from 'electron'
+import { BrowserWindow, ipcMain, app, screen } from 'electron'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { is } from '@electron-toolkit/utils'
@@ -15,6 +15,7 @@ import type { UserTask, TaskRunEvent } from '../../shared/tasks/UserTask'
 
 const DEFAULT_PALETTE_BOUNDS = { width: 720, height: 560 }
 const PALETTE_MIN_SIZE = { width: 420, height: 320 }
+const MINIMAL_MIN_WIDTH = 360
 
 export default class IpcTasks {
   private static sInstance: IpcTasks
@@ -134,8 +135,8 @@ export default class IpcTasks {
     })
     ipcMain.handle('palette:get-theme', () => this.currentTheme)
 
-    // 极简模式:收缩为置顶小条(默认与最小尺寸 = 命令条内容宽 + 两行输出高),退出恢复原样
-    ipcMain.handle('palette:set-minimal', (_, minimal: boolean, contentWidth?: number) => {
+    // 极简模式:收缩为置顶小条(宽度 = 记忆宽度或渲染层实测内容宽;高度 = 命令条实测高 + 两行输出),退出恢复原样
+    ipcMain.handle('palette:set-minimal', (_, minimal: boolean, contentWidth?: number, barHeight?: number) => {
       const win = this.paletteWindow
       if (!win || win.isDestroyed()) return { success: false }
       this.paletteMinimal = minimal === true
@@ -144,13 +145,13 @@ export default class IpcTasks {
         this.palettePreMinimalMaximized = win.isMaximized()
         if (this.palettePreMinimalMaximized) win.unmaximize()
         this.palettePreMinimalBounds = win.getNormalBounds()
-        // 宽度取渲染层实测的命令条内容宽;高度 = 36 命令条 + 两行输出
         const measured = Number(contentWidth)
         const width = Number.isFinite(measured) && measured > 0 ? Math.ceil(measured) : this.palettePreMinimalBounds.width
-        const MINIMAL_BAR_HEIGHT = 36
-        const MINIMAL_OUTPUT_LINES = 2
-        const height = MINIMAL_BAR_HEIGHT + MINIMAL_OUTPUT_LINES * 19 + 4
-        // 窗口创建时的 minHeight 320 会钳制 setBounds,先放开最小尺寸;极简下仍可拖边缘调整大小
+        // 命令条任务按钮支持换行,高度随行数变化,由渲染层实测传入(36 为单行兜底)
+        const MINIMAL_OUTPUT_HEIGHT = 2 * 19 + 4
+        const measuredBarHeight = Number(barHeight)
+        const height = (Number.isFinite(measuredBarHeight) && measuredBarHeight > 0 ? Math.ceil(measuredBarHeight) : 36) + MINIMAL_OUTPUT_HEIGHT
+        // 窗口创建时的 minHeight 320 会钳制 setBounds,先放开最小尺寸
         win.setMinimumSize(width, height)
         win.setBounds({ x: this.palettePreMinimalBounds.x, y: this.palettePreMinimalBounds.y, width, height })
         win.setAlwaysOnTop(true)
@@ -163,6 +164,30 @@ export default class IpcTasks {
         win.setMinimumSize(PALETTE_MIN_SIZE.width, PALETTE_MIN_SIZE.height)
       }
       return { success: true }
+    })
+
+    // 极简模式运行期调宽/调高:宽度走增量(渲染层拖把手,主进程按自身 bounds 累加避免 DPI 换算漂移),
+    // 高度走绝对值(换行行数变化后渲染层实测同步)。命令条 drag 区覆盖窗口边缘,原生边缘 resize 抓不到
+    ipcMain.handle('palette:resize-minimal', (_, widthDelta?: number, height?: number) => {
+      const win = this.paletteWindow
+      if (!win || win.isDestroyed() || !this.paletteMinimal) return { success: false }
+      const bounds = win.getBounds()
+      const next: { width?: number; height?: number } = {}
+      const delta = Number(widthDelta)
+      if (Number.isFinite(delta) && delta !== 0) {
+        const workArea = screen.getDisplayMatching(bounds).workArea
+        next.width = Math.round(Math.min(Math.max(bounds.width + delta, MINIMAL_MIN_WIDTH), workArea.width))
+      }
+      const absHeight = Number(height)
+      if (Number.isFinite(absHeight) && absHeight > 0) {
+        next.height = Math.round(absHeight)
+      }
+      if (next.width !== undefined || next.height !== undefined) {
+        // 先放开最小尺寸再 setBounds:缩小方向的 setBounds 会被旧最小尺寸钳制
+        win.setMinimumSize(next.width ?? bounds.width, next.height ?? bounds.height)
+        win.setBounds({ ...bounds, ...next })
+      }
+      return { success: true, width: next.width ?? bounds.width, height: next.height ?? bounds.height }
     })
 
     // 应用退出前停掉运行中的任务与后台常驻进程(否则孤儿进程会继续占用 J-Link 等)

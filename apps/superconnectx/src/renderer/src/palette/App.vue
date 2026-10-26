@@ -50,6 +50,8 @@
           <el-icon :size="12"><Close /></el-icon>
         </button>
       </span>
+      <!-- 宽度拖拽把手:命令条 drag 区覆盖窗口边缘,原生边缘 resize 抓不到 -->
+      <span class="minimal-resize" :title="t('palette.minimalResize')" @mousedown="beginMinimalResize"></span>
     </div>
 
     <!-- 极简输出区:限高滚动,只保留最近输出 -->
@@ -608,6 +610,28 @@ const closeWindow = (): void => {
 // ===== 极简模式:置顶小条(组下拉 + 任务运行按钮);runningTaskName 复用输出区已有状态 =====
 const minimalMode = ref(false)
 
+// 极简宽度记忆:用户拖出的宽度优先于按内容实测
+const MINIMAL_WIDTH_KEY = 'palette-minimal-width'
+const MINIMAL_OUTPUT_HEIGHT = 2 * 19 + 4
+
+const readSavedMinimalWidth = (): number | null => {
+  try {
+    const v = Number(localStorage.getItem(MINIMAL_WIDTH_KEY))
+    return Number.isFinite(v) && v >= 360 ? v : null
+  } catch {
+    return null
+  }
+}
+
+// 窗口宽度变化后任务按钮换行行数变化,实测命令条高再同步窗口高度
+const syncMinimalHeight = async (): Promise<void> => {
+  if (!minimalMode.value) return
+  await nextTick()
+  await new Promise((r) => requestAnimationFrame(r))
+  const bar = document.querySelector('.minimal-bar') as HTMLElement | null
+  if (bar) await window.paletteApi?.resizeMinimal?.(null, bar.offsetHeight + MINIMAL_OUTPUT_HEIGHT)
+}
+
 // 模式切换输出容器重新挂载会复位滚动位置,切回时滚到底部(最新输出才是有效信息)
 watch(minimalMode, async () => {
   await nextTick()
@@ -620,26 +644,67 @@ const toggleMinimal = async (): Promise<void> => {
   minimalMode.value = next
   if (next) {
     keyword.value = ''
-    // 等命令条渲染完成后实测内容自然宽度:bar 是块级容器会被拉伸到窗口宽,
-    // scrollWidth 下限即自身宽度(等于旧面板宽),须临时 width:max-content 取内容宽
-    await nextTick()
-    const bar = document.querySelector('.minimal-bar') as HTMLElement | null
+    // 记忆宽度优先;无记忆时实测内容自然宽度:bar 是块级容器会被拉伸到窗口宽,
+    // 须临时 width:max-content 取单行内容宽
     let width: number | undefined
-    if (bar) {
-      const prev = bar.style.width
-      bar.style.width = 'max-content'
-      // +28 预留运行状态图标(✓/✗/⟳)宽度:测量时该图标尚未渲染,不预留会导致运行结束后按钮被挤压
-      width = Math.min(Math.ceil(bar.offsetWidth) + 6 + 28, Math.max(window.screen.availWidth - 40, 300))
-      bar.style.width = prev
+    const saved = readSavedMinimalWidth()
+    if (saved == null) {
+      await nextTick()
+      const bar = document.querySelector('.minimal-bar') as HTMLElement | null
+      if (bar) {
+        const prev = bar.style.width
+        bar.style.width = 'max-content'
+        // +28 预留运行状态图标(✓/✗/⟳)宽度:测量时该图标尚未渲染,不预留会导致运行结束后按钮被挤压
+        width = Math.min(Math.ceil(bar.offsetWidth) + 6 + 28, Math.max(window.screen.availWidth - 40, 300))
+        bar.style.width = prev
+      }
+    } else {
+      width = saved
     }
     await window.paletteApi?.setMinimal?.(true, width)
+    // 窗口按目标宽收缩后按钮换行,实测行高再同步窗口高度
+    await syncMinimalHeight()
   } else {
     await window.paletteApi?.setMinimal?.(false)
   }
 }
 
-const minimalGroupTasks = computed<UserTask[]>(() =>
-  taskGroups.value.find((group) => group.name === activeGroup.value)?.tasks ?? []
+// ===== 极简宽度拖拽:右缘把手,增量发给主进程按自身 bounds 累加(避免 DPI 换算漂移) =====
+const beginMinimalResize = (e: MouseEvent): void => {
+  if (e.button !== 0) return
+  e.preventDefault()
+  let lastX = e.screenX
+  const onMove = (ev: MouseEvent): void => {
+    const delta = ev.screenX - lastX
+    lastX = ev.screenX
+    if (delta !== 0) window.paletteApi?.resizeMinimal?.(delta, null)
+  }
+  const onUp = (): void => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    document.body.style.userSelect = ''
+    try {
+      localStorage.setItem(MINIMAL_WIDTH_KEY, String(window.innerWidth))
+    } catch {
+      /* ignore */
+    }
+    syncMinimalHeight()
+  }
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+const minimalGroupTasks = computed<UserTask[]>(
+  () => taskGroups.value.find((group) => group.name === activeGroup.value)?.tasks ?? []
+)
+
+// 换组后任务按钮数变化,换行行数随之变化,同步窗口高度
+watch(
+  () => minimalGroupTasks.value.length,
+  () => {
+    if (minimalMode.value) syncMinimalHeight()
+  }
 )
 
 const minimalOutputLines = computed<OutputLine[]>(() => outputLines.value.slice(-200))
@@ -846,11 +911,11 @@ onUnmounted(() => {
 
 .minimal-bar {
   flex: none;
-  height: 36px;
+  min-height: 36px; /* 任务按钮换行后高度自适应,单行时不低于 36 */
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 4px 0 8px;
+  padding: 2px 4px 2px 8px;
   overflow: hidden;
   -webkit-app-region: drag;
   background: var(--bg-titlebar, #2d2d30);
@@ -887,12 +952,24 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  overflow-x: auto;
+  row-gap: 4px;
+  flex-wrap: wrap; /* 拖窄窗口时任务按钮换行,不再横向滚动 */
   min-width: 0;
 }
 
 .minimal-task-btn {
   flex-shrink: 0;
+}
+
+/* 右缘宽度拖拽把手 */
+.minimal-resize {
+  flex: none;
+  width: 8px;
+  align-self: stretch;
+  margin-left: 2px;
+  cursor: ew-resize;
+  -webkit-app-region: no-drag;
+  border-left: 1px solid var(--border-secondary, #404040);
 }
 
 .minimal-empty {

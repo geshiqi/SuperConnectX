@@ -231,8 +231,13 @@ contextBridge.exposeInMainWorld('paletteApi', {
   toggleMaximize: (): Promise<{ success: boolean; maximized?: boolean }> => ipcRenderer.invoke('palette:toggle-maximize'),
   close: (): Promise<{ success: boolean }> => ipcRenderer.invoke('palette:close'),
   isMaximized: (): Promise<boolean> => ipcRenderer.invoke('palette:is-maximized'),
-  setMinimal: (minimal: boolean, contentWidth?: number): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('palette:set-minimal', minimal, contentWidth),
+  setMinimal: (minimal: boolean, contentWidth?: number, barHeight?: number): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('palette:set-minimal', minimal, contentWidth, barHeight),
+  resizeMinimal: (
+    widthDelta: number | null,
+    height: number | null
+  ): Promise<{ success: boolean; width?: number; height?: number }> =>
+    ipcRenderer.invoke('palette:resize-minimal', widthDelta, height),
   notifyTheme: (theme: string): void => {
     ipcRenderer.send('palette:set-theme', theme)
   },

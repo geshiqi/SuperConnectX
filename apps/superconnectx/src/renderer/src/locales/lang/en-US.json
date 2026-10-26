@@ -863,6 +863,7 @@
     "enterMinimal": "Minimal mode (top bar)",
     "exitMinimal": "Exit minimal mode",
     "minimalNoTasks": "No tasks in this group",
+    "minimalResize": "Drag to resize width",
     "deleteGroup": "Delete group (with tasks)",
     "deleteGroupTitle": "Delete Group",
     "deleteGroupConfirm": "Delete group \"{name}\"? All {count} tasks in it will be deleted!",

@@ -195,7 +195,11 @@ declare global {
       toggleMaximize: () => Promise<{ success: boolean; maximized?: boolean }>
       close: () => Promise<{ success: boolean }>
       isMaximized: () => Promise<boolean>
-      setMinimal: (minimal: boolean, contentWidth?: number) => Promise<{ success: boolean }>
+      setMinimal: (minimal: boolean, contentWidth?: number, barHeight?: number) => Promise<{ success: boolean }>
+      resizeMinimal: (
+        widthDelta: number | null,
+        height: number | null
+      ) => Promise<{ success: boolean; width?: number; height?: number }>
       notifyTheme: (theme: string) => void
       getTheme: () => Promise<string | null>
       onThemeChanged: (callback: (theme: string) => void) => () => void
