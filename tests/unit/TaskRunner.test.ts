@@ -184,7 +184,8 @@ describe('TaskRunner', () => {
     const connector = makeConnector()
     const started = Date.now()
     const result = await runner.run(
-      runTask([{ type: 'shell', command: 'node -e setInterval(console.log,60000)', background: true }]),
+      // 引号包裹:圆括号在 Linux /bin/sh -c 下是语法元字符,不带引号会语法错误秒退
+      runTask([{ type: 'shell', command: 'node -e "setInterval(console.log,60000)"', background: true }]),
       { activeSessionId: null, emit, connector }
     )
     // 观察期约 2.5s 后步骤成功,任务整体完成,不等待 60s 进程

@@ -4,6 +4,14 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import path from 'path'
+import fs from 'fs'
+import os from 'os'
+
+// 实例下标自动探测靠 userData 下的文件锁:并行 worker 或同 worker 先前导入的
+// 单例会持锁导致下标漂移到 1+,用每次独立的临时目录隔离,保证探测结果确定。
+// 注意 resetModules 后动态导入的模块持有新的 electron mock 实例,
+// 须在同一注册表内动态取 app 再 spy,文件顶部的 import 不生效
+const freshUserDataDir = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'scx-appdir-test-'))
 
 describe('AppDir - pure logic', () => {
   describe('directory structure', () => {
@@ -32,8 +40,17 @@ describe('AppDir - pure logic', () => {
       mod = await import('@/main/utils/AppDir')
     })
 
-    it('should default to 0 when no args or env', () => {
-      expect(mod.getInstanceIndex()).toBe(0)
+    it('should default to 0 when no args or env', async () => {
+      vi.resetModules()
+      vi.spyOn(process, 'argv', 'get').mockReturnValue(['node', 'app.js'])
+      const { app } = await import('electron')
+      const spy = vi.spyOn(app, 'getPath').mockReturnValue(freshUserDataDir())
+      try {
+        const mod = await import('@/main/utils/AppDir')
+        expect(mod.getInstanceIndex()).toBe(0)
+      } finally {
+        spy.mockRestore()
+      }
     })
 
     it('should read from --instance-index command line arg', () => {
@@ -108,10 +125,16 @@ describe('AppDir - pure logic', () => {
 
     it('should return userData when instance index is 0', async () => {
       vi.spyOn(process, 'argv', 'get').mockReturnValue(['node', 'app.js'])
-      const { getChromiumDataDir } = await import('@/main/utils/AppDir')
-      const result = getChromiumDataDir()
-      // userData in test = process.env.APPDATA or fallback
-      expect(result).not.toContain('_instance_')
+      const { app } = await import('electron')
+      const spy = vi.spyOn(app, 'getPath').mockReturnValue(freshUserDataDir())
+      try {
+        const { getChromiumDataDir } = await import('@/main/utils/AppDir')
+        const result = getChromiumDataDir()
+        // userData in test = process.env.APPDATA or fallback
+        expect(result).not.toContain('_instance_')
+      } finally {
+        spy.mockRestore()
+      }
     })
 
     it('should return _instance_N subdir when instance index > 0', async () => {

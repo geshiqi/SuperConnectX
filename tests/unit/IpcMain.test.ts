@@ -38,9 +38,17 @@ vi.mock('electron', () => ({
         loadFile: vi.fn(),
         loadURL: vi.fn(),
         hide: vi.fn(),
-        on: vi.fn((event: string, handler: Function) => events.set(event, handler)),
+        show: vi.fn(),
+        maximize: vi.fn(),
+        unmaximize: vi.fn(),
         isMaximized: vi.fn(() => false),
+        isMinimized: vi.fn(() => false),
         isDestroyed: vi.fn(() => false),
+        // createWindow 的窗口状态保存/事件注册链路需要 getNormalBounds;缺失会在
+        // maximize()/once() 处抛 TypeError 中断流程,resize 等监听器因此时有时无
+        getNormalBounds: vi.fn(() => ({ x: 0, y: 0, width: 800, height: 600 })),
+        on: vi.fn((event: string, handler: Function) => events.set(event, handler)),
+        once: vi.fn((event: string, handler: Function) => events.set(event, handler)),
         webContents: {
           on: vi.fn(),
           setWindowOpenHandler: vi.fn(),
@@ -236,7 +244,11 @@ describe('IpcMain', () => {
   describe('window maximized state notifications', () => {
     it('uses typed IPC and de-duplicates unchanged resize state', async () => {
       ipcMainInst.init({ flush: vi.fn() }, {})
-      await vi.waitFor(() => expect(mockBrowserWindows).toHaveLength(1))
+      // 等监听器真正挂上(而非仅窗口创建),避免慢机器上 resize 尚未注册的竞态
+      await vi.waitFor(() => {
+        expect(mockBrowserWindows).toHaveLength(1)
+        expect(mockBrowserWindows[0].events.get('resize')).toBeInstanceOf(Function)
+      })
       const window = mockBrowserWindows[0]
 
       window.events.get('resize')!()
@@ -252,7 +264,10 @@ describe('IpcMain', () => {
 
     it('does not send after the window is destroyed', async () => {
       ipcMainInst.init({ flush: vi.fn() }, {})
-      await vi.waitFor(() => expect(mockBrowserWindows).toHaveLength(1))
+      await vi.waitFor(() => {
+        expect(mockBrowserWindows).toHaveLength(1)
+        expect(mockBrowserWindows[0].events.get('resize')).toBeInstanceOf(Function)
+      })
       const window = mockBrowserWindows[0]
       window.isDestroyed.mockReturnValue(true)
 
