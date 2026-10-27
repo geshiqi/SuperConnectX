@@ -295,6 +295,9 @@ const importData = async () => {
         if (importResult.connectionsImported !== undefined) {
           parts.push(t('importDialog.connectionsImported', { added: importResult.connectionsImported, skipped: importResult.connectionsSkipped }))
         }
+        if (importResult.userTasksImported !== undefined) {
+          parts.push(t('importDialog.userTasksImported', { added: importResult.userTasksImported, skipped: importResult.userTasksSkipped }))
+        }
         const message = parts.length > 0 ? parts.join(' | ') : t('importDialog.importSuccess')
         emit('notifyImport', { success: true, title: t('importDialog.importSuccessTitle'), message })
         emit('refreshCommands')

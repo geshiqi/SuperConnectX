@@ -3,11 +3,22 @@
  * 测试数据存储 IPC handler 注册和核心逻辑
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import path from 'path'
+import os from 'os'
+import { randomUUID } from 'node:crypto'
+import { createRequire } from 'node:module'
 
-const { mockHandlers, mockIpcMain } = vi.hoisted(() => {
+// vitest 对 adm-zip(CJS)的 ESM 互操作会丢实例方法,用 createRequire 直取 CJS 类
+const AdmZip = createRequire(import.meta.url)('adm-zip') as new () => {
+  addFile: (entryName: string, content: Buffer) => void
+  writeZip: (filePath: string) => void
+}
+
+const { mockHandlers, mockIpcMain, notifyTasksChangedSpy } = vi.hoisted(() => {
   const handlers = new Map<string, Function>()
   return {
     mockHandlers: handlers,
+    notifyTasksChangedSpy: vi.fn(),
     mockIpcMain: {
       _handlers: handlers,
       handle(channel: string, handler: Function) {
@@ -17,7 +28,30 @@ const { mockHandlers, mockIpcMain } = vi.hoisted(() => {
   }
 })
 
-vi.mock('electron', () => ({ ipcMain: mockIpcMain }))
+// IpcStorage 经 IpcTasks(notifyTasksChanged)联动面板窗口,IpcTasks 及其依赖
+// (WindowStateStorage)从 electron 具名导入多个成员,mock 须提供这些导出否则 ESM 具名导入直接报错。
+// app.getPath 供 scripts 导入等运行时路径解析使用
+vi.mock('electron', () => ({
+  ipcMain: mockIpcMain,
+  app: { getPath: () => path.join(os.tmpdir(), 'scx-ipcstorage-test-userdata') },
+  screen: { getDisplayMatching: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } })) },
+  BrowserWindow: class {}
+}))
+
+// IpcTasks 引入的 @electron-toolkit/utils 内部同样具名导入 electron 的 BrowserWindow,须一并 mock
+vi.mock('@electron-toolkit/utils', () => ({
+  electronApp: { setAppUserModelId: vi.fn() },
+  optimizer: { watchWindowShortcuts: vi.fn() },
+  is: { dev: true }
+}))
+
+vi.mock('@/main/ipc/IpcTasks', () => ({
+  default: {
+    getInstance() {
+      return { notifyTasksChanged: notifyTasksChangedSpy }
+    }
+  }
+}))
 
 vi.mock('@/main/ipc/IpcAppLogger', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
@@ -231,6 +265,41 @@ describe('IpcStorage', () => {
       const result = await mockHandlers.get('get-shortcut-actions')!()
       expect(Array.isArray(result)).toBe(true)
       expect(result.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('import-data 面板联动', () => {
+    const makeZip = (entries: Array<[string, unknown]>): string => {
+      const zip = new AdmZip()
+      for (const [name, data] of entries) {
+        zip.addFile(name, Buffer.from(JSON.stringify({ type: name.replace('.json', ''), data })))
+      }
+      const file = path.join(os.tmpdir(), `scx-import-test-${randomUUID()}.zip`)
+      zip.writeZip(file)
+      return file
+    }
+
+    it('导入含用户任务的 ZIP 后通知面板重载', async () => {
+      ipcStorage.init()
+      notifyTasksChangedSpy.mockClear()
+      const file = makeZip([['userTasks.json', [{ id: randomUUID(), name: '导入的任务', steps: [] }]]])
+
+      const result = await mockHandlers.get('import-data')!(null, file)
+
+      expect(result.success).toBe(true)
+      expect(result.userTasksImported).toBe(1)
+      expect(notifyTasksChangedSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('不含用户任务的导入不触发面板通知', async () => {
+      ipcStorage.init()
+      notifyTasksChangedSpy.mockClear()
+      const file = makeZip([['scripts.json', { 'demo.cmd': 'echo hi' }]])
+
+      const result = await mockHandlers.get('import-data')!(null, file)
+
+      expect(result.success).toBe(true)
+      expect(notifyTasksChangedSpy).not.toHaveBeenCalled()
     })
   })
 })

@@ -11,11 +11,13 @@ import CommandHistoryStorage from '../storage/CommandHistoryStorage'
 import LogFilterStorage from '../storage/LogFilterStorage'
 import UserTaskStorage from '../storage/UserTaskStorage'
 import IpcConnector from './IpcConnector'
+import IpcTasks from './IpcTasks'
 import BackupManager from '../utils/BackupManager'
-import AdmZip from 'adm-zip'
 import fs from 'fs'
 import path from 'path'
 import { getAppDataDir } from '../utils/AppDir'
+// adm-zip/archiver 为 CJS 包:ESM 具名 interop 在 vitest 下丢失实例方法,统一 require
+const AdmZip = require('adm-zip')
 const archiver = require('archiver')
 import { STORAGE_IPC_CHANNELS } from '../../shared/ipc/storage'
 
@@ -216,6 +218,10 @@ export default class IpcStorage {
         if (result.__invalidFormat) {
           logger.warn('[IpcStorage] import-data: invalid format, no importable data found')
           return { success: false, message: 'INVALID_FORMAT' }
+        }
+        // 导入了用户任务:通知已打开的命令面板窗口立即重载,否则面板任务列表停留在挂载时的快照,需重启才能看到
+        if (result.userTasksImported !== undefined) {
+          IpcTasks.getInstance().notifyTasksChanged()
         }
         logger.info('[IpcStorage] import-data success:', JSON.stringify(result))
         return { success: true, ...result }

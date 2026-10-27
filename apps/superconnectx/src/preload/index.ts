@@ -220,6 +220,11 @@ contextBridge.exposeInMainWorld('taskApi', {
     const listener = (_event: Electron.IpcRendererEvent, data: import('../shared/tasks/UserTask').TaskRunEvent): void => callback(data)
     ipcRenderer.on('task:event', listener)
     return () => ipcRenderer.removeListener('task:event', listener)
+  },
+  onTaskReload: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('task:reload', listener)
+    return () => ipcRenderer.removeListener('task:reload', listener)
   }
 })
 

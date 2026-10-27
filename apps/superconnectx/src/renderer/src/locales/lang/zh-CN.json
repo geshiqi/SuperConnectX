@@ -679,6 +679,7 @@
     "groupsImported": "命令组: 新增{added}, 跳过{skipped}",
     "commandsImported": "命令: 新增{added}, 跳过{skipped}",
     "connectionsImported": "连接: 新增{added}, 跳过{skipped}",
+    "userTasksImported": "用户任务: 新增{added}, 跳过{skipped}",
     "invalidFormat": "ZIP 文件格式不符合规范：未找到可导入的数据文件"
   },
   "virtualPort": {

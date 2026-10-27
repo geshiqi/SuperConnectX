@@ -204,6 +204,14 @@ export default class IpcTasks {
     }
   }
 
+  /** 用户数据导入等外部变更后通知面板窗口重载任务列表(面板任务仅在挂载时加载,跨窗口须经主进程中继) */
+  notifyTasksChanged(): void {
+    const win = this.paletteWindow
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('task:reload')
+    }
+  }
+
   // ===== 面板窗口 =====
 
   togglePalette(): void {

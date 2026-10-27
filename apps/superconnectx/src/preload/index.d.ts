@@ -51,7 +51,7 @@ declare global {
       importCommands: (filePath: string) => Promise<any>
       importFromSuperCom: (filePath: string) => Promise<any>
       exportData: (filePath: string, selections: string[]) => Promise<{ success: boolean; message?: string }>
-      importData: (filePath: string) => Promise<{ success: boolean; message?: string; settingsImported?: boolean; groupsImported?: number; groupsSkipped?: number; commandsImported?: number; commandsSkipped?: number; comPortsImported?: boolean; connectionsImported?: number; connectionsSkipped?: number }>
+      importData: (filePath: string) => Promise<{ success: boolean; message?: string; settingsImported?: boolean; groupsImported?: number; groupsSkipped?: number; commandsImported?: number; commandsSkipped?: number; comPortsImported?: boolean; connectionsImported?: number; connectionsSkipped?: number; userTasksImported?: number; userTasksSkipped?: number }>
 
       getComSettings: (comName: string) => Promise<any>
       saveComSettings: (comName: string, settings: any) => Promise<boolean>
@@ -188,6 +188,7 @@ declare global {
       stopBackground: () => Promise<{ success: boolean; stopped: number }>
       notifyActiveSession: (sessionId: string | null) => void
       onTaskEvent: (callback: (event: import('../shared/tasks/UserTask').TaskRunEvent) => void) => () => void
+      onTaskReload: (callback: () => void) => () => void
     }
     paletteApi: {
       toggle: () => void

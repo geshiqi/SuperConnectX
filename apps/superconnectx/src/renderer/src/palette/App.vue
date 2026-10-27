@@ -431,6 +431,7 @@ const appendOutput = (text: string, kind: OutputLine['kind']): void => {
 }
 
 let removeListener: (() => void) | null = null
+let removeTaskReloadListener: (() => void) | null = null
 
 const handleEvent = (event: TaskRunEvent): void => {
   switch (event.kind) {
@@ -478,6 +479,17 @@ const loadTasks = async (): Promise<void> => {
     tasks.value = await window.taskApi.list()
   } catch (error) {
     console.error('failed to load tasks:', error)
+  }
+}
+
+// 导入用户数据等外部变更:重载任务列表;按 id 恢复键盘选中条目,避免新任务插入导致选中漂移。
+// 只换列表数据,不碰运行状态(运行在主进程 TaskRunner,面板仅镜像事件流)
+const handleTaskReload = async (): Promise<void> => {
+  const selectedId = currentTasks.value[selectedIndex.value]?.id
+  await loadTasks()
+  if (selectedId != null) {
+    const idx = currentTasks.value.findIndex((t) => t.id === selectedId)
+    if (idx >= 0) selectedIndex.value = idx
   }
 }
 
@@ -778,6 +790,7 @@ watch(currentTasks, () => {
 
 onMounted(async () => {
   removeListener = window.taskApi.onTaskEvent(handleEvent)
+  removeTaskReloadListener = window.taskApi.onTaskReload(handleTaskReload)
   removeMaximizedListener = window.paletteApi?.onMaximizedChanged?.((maximized) => {
     isMaximized.value = maximized
   }) ?? null
@@ -799,6 +812,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   removeListener?.()
+  removeTaskReloadListener?.()
   removeMaximizedListener?.()
   removeThemeListener?.()
   if (backgroundTimer) clearInterval(backgroundTimer)

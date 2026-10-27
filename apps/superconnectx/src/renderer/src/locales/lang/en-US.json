@@ -679,6 +679,7 @@
     "groupsImported": "Groups: {added} added, {skipped} skipped",
     "commandsImported": "Commands: {added} added, {skipped} skipped",
     "connectionsImported": "Connections: {added} added, {skipped} skipped",
+    "userTasksImported": "User tasks: {added} added, {skipped} skipped",
     "invalidFormat": "Invalid ZIP format: no importable data files found"
   },
   "virtualPort": {
