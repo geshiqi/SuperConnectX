@@ -240,9 +240,10 @@ contextBridge.exposeInMainWorld('paletteApi', {
     ipcRenderer.invoke('palette:set-minimal', minimal, contentWidth, barHeight),
   resizeMinimal: (
     widthDelta: number | null,
-    height: number | null
+    height: number | null,
+    minWidth?: number
   ): Promise<{ success: boolean; width?: number; height?: number }> =>
-    ipcRenderer.invoke('palette:resize-minimal', widthDelta, height),
+    ipcRenderer.invoke('palette:resize-minimal', widthDelta, height, minWidth),
   notifyTheme: (theme: string): void => {
     ipcRenderer.send('palette:set-theme', theme)
   },

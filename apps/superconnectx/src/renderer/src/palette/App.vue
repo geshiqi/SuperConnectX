@@ -19,8 +19,8 @@
       </div>
     </div>
 
-    <!-- 极简模式:组下拉 + 当前组任务运行按钮 + 状态 -->
-    <div v-if="minimalMode" class="minimal-bar">
+    <!-- 极简模式:组下拉 + 当前组任务运行按钮 + 状态;支持横条/竖列两种布局 -->
+    <div v-if="minimalMode" class="minimal-bar" :class="{ vertical: minimalLayout === 'vertical' }">
       <el-select v-model="activeGroup" size="small" class="minimal-group">
         <el-option v-for="group in taskGroups" :key="group.name" :label="`${group.name || t('palette.groupUngrouped')} (${group.tasks.length})`" :value="group.name" />
       </el-select>
@@ -43,6 +43,9 @@
       <span v-if="isRunning" class="minimal-status run"><el-icon class="spin"><Loading /></el-icon></span>
       <span v-else-if="lastRunStatus" class="minimal-status" :class="lastRunStatus.success ? 'ok' : 'fail'">{{ lastRunStatus.success ? '✓' : '✗' }}</span>
       <span class="minimal-controls">
+        <button class="win-btn" :title="t('palette.minimalLayoutToggle')" @click="toggleMinimalLayout">
+          <el-icon :size="12"><Sort /></el-icon>
+        </button>
         <button class="win-btn" :title="t('palette.exitMinimal')" @click="toggleMinimal">
           <el-icon :size="12"><Expand /></el-icon>
         </button>
@@ -50,8 +53,19 @@
           <el-icon :size="12"><Close /></el-icon>
         </button>
       </span>
-      <!-- 宽度拖拽把手:命令条 drag 区覆盖窗口边缘,原生边缘 resize 抓不到 -->
-      <span class="minimal-resize" :title="t('palette.minimalResize')" @mousedown="beginMinimalResize"></span>
+      <!-- 调节把手:命令条 drag 区覆盖窗口边缘,原生边缘 resize 抓不到。
+           横形 = 右缘拖宽;竖形 = 右缘拖宽 + 底缘拖高 -->
+      <span
+        v-if="minimalLayout === 'vertical'"
+        class="minimal-resize-w"
+        :title="t('palette.minimalResize')"
+        @mousedown="beginMinimalResize($event, 'width')"
+      ></span>
+      <span
+        class="minimal-resize"
+        :title="t('palette.minimalResize')"
+        @mousedown="beginMinimalResize($event, minimalLayout === 'vertical' ? 'height' : 'width')"
+      ></span>
     </div>
 
     <!-- 极简输出区:限高滚动,只保留最近输出 -->
@@ -622,26 +636,65 @@ const closeWindow = (): void => {
 // ===== 极简模式:置顶小条(组下拉 + 任务运行按钮);runningTaskName 复用输出区已有状态 =====
 const minimalMode = ref(false)
 
-// 极简宽度记忆:用户拖出的宽度优先于按内容实测
+// 极简布局:horizontal 横条 / vertical 竖列,横竖各自的宽度分别记忆
+const MINIMAL_LAYOUT_KEY = 'palette-minimal-layout'
 const MINIMAL_WIDTH_KEY = 'palette-minimal-width'
+const MINIMAL_WIDTH_V_KEY = 'palette-minimal-width-vertical'
 const MINIMAL_OUTPUT_HEIGHT = 2 * 19 + 4
 
+const minimalLayout = ref<'horizontal' | 'vertical'>(
+  (() => {
+    try {
+      return localStorage.getItem(MINIMAL_LAYOUT_KEY) === 'vertical' ? 'vertical' : 'horizontal'
+    } catch {
+      return 'horizontal'
+    }
+  })()
+)
+
 const readSavedMinimalWidth = (): number | null => {
+  const key = minimalLayout.value === 'vertical' ? MINIMAL_WIDTH_V_KEY : MINIMAL_WIDTH_KEY
+  const min = minimalLayout.value === 'vertical' ? 140 : 360
   try {
-    const v = Number(localStorage.getItem(MINIMAL_WIDTH_KEY))
-    return Number.isFinite(v) && v >= 360 ? v : null
+    const v = Number(localStorage.getItem(key))
+    return Number.isFinite(v) && v >= min ? v : null
   } catch {
     return null
   }
 }
 
-// 窗口宽度变化后任务按钮换行行数变化,实测命令条高再同步窗口高度
+// 实测当前布局的内容自然宽度:bar 是块级容器会被拉伸到窗口宽,须临时 width:max-content
+// (横形 = 单行内容宽;竖形 = grid 最宽行,含组行与最宽任务按钮)
+const measureMinimalContentWidth = async (): Promise<number | undefined> => {
+  await nextTick()
+  const bar = document.querySelector('.minimal-bar') as HTMLElement | null
+  if (!bar) return undefined
+  const prev = bar.style.width
+  bar.style.width = 'max-content'
+  // +28 预留运行状态图标(✓/✗/⟳)宽度:测量时该图标尚未渲染,不预留会导致运行结束后按钮被挤压
+  let width = Math.ceil(bar.offsetWidth) + 6 + 28
+  if (minimalLayout.value === 'vertical') width = Math.max(width, 140)
+  width = Math.min(width, Math.max(window.screen.availWidth - 40, 300))
+  bar.style.width = prev
+  return width
+}
+
+// 窗口宽度/布局变化后任务区行数变化,实测命令条高再同步窗口高度
 const syncMinimalHeight = async (): Promise<void> => {
   if (!minimalMode.value) return
   await nextTick()
   await new Promise((r) => requestAnimationFrame(r))
   const bar = document.querySelector('.minimal-bar') as HTMLElement | null
-  if (bar) await window.paletteApi?.resizeMinimal?.(null, bar.offsetHeight + MINIMAL_OUTPUT_HEIGHT)
+  if (!bar) return
+  // 竖形:任务列 max-height 基于 100vh(当前窗口高)。切换布局时窗口还是横形的矮尺寸,
+  // 列会被压扁、量出的高度过小,高度同步就此锁死错误值。测量时先解除限制,量完恢复
+  // (恢复后若内容高于新窗口,列内滚动)
+  const tasksEl = bar.querySelector('.minimal-tasks') as HTMLElement | null
+  const unclamp = minimalLayout.value === 'vertical' && tasksEl
+  if (unclamp) tasksEl!.style.maxHeight = 'none'
+  const height = bar.offsetHeight + MINIMAL_OUTPUT_HEIGHT
+  if (unclamp) tasksEl!.style.maxHeight = ''
+  await window.paletteApi?.resizeMinimal?.(null, height)
 }
 
 // 模式切换输出容器重新挂载会复位滚动位置,切回时滚到底部(最新输出才是有效信息)
@@ -651,54 +704,68 @@ watch(minimalMode, async () => {
   if (el) el.scrollTop = el.scrollHeight
 })
 
+// 进入极简或切换布局:宽度优先取该布局记忆值,无记忆则实测;窗口收缩后实测行高再同步窗口高度
+const applyMinimalGeometry = async (): Promise<void> => {
+  const saved = readSavedMinimalWidth()
+  const width = saved ?? (await measureMinimalContentWidth())
+  await window.paletteApi?.setMinimal?.(true, width)
+  await syncMinimalHeight()
+}
+
 const toggleMinimal = async (): Promise<void> => {
   const next = !minimalMode.value
   minimalMode.value = next
   if (next) {
     keyword.value = ''
-    // 记忆宽度优先;无记忆时实测内容自然宽度:bar 是块级容器会被拉伸到窗口宽,
-    // 须临时 width:max-content 取单行内容宽
-    let width: number | undefined
-    const saved = readSavedMinimalWidth()
-    if (saved == null) {
-      await nextTick()
-      const bar = document.querySelector('.minimal-bar') as HTMLElement | null
-      if (bar) {
-        const prev = bar.style.width
-        bar.style.width = 'max-content'
-        // +28 预留运行状态图标(✓/✗/⟳)宽度:测量时该图标尚未渲染,不预留会导致运行结束后按钮被挤压
-        width = Math.min(Math.ceil(bar.offsetWidth) + 6 + 28, Math.max(window.screen.availWidth - 40, 300))
-        bar.style.width = prev
-      }
-    } else {
-      width = saved
-    }
-    await window.paletteApi?.setMinimal?.(true, width)
-    // 窗口按目标宽收缩后按钮换行,实测行高再同步窗口高度
-    await syncMinimalHeight()
+    await applyMinimalGeometry()
   } else {
     await window.paletteApi?.setMinimal?.(false)
   }
 }
 
-// ===== 极简宽度拖拽:右缘把手,增量发给主进程按自身 bounds 累加(避免 DPI 换算漂移) =====
-const beginMinimalResize = (e: MouseEvent): void => {
+const toggleMinimalLayout = async (): Promise<void> => {
+  minimalLayout.value = minimalLayout.value === 'vertical' ? 'horizontal' : 'vertical'
+  try {
+    localStorage.setItem(MINIMAL_LAYOUT_KEY, minimalLayout.value)
+  } catch {
+    /* ignore */
+  }
+  if (minimalMode.value) await applyMinimalGeometry()
+}
+
+// ===== 极简调节把手:增量发给主进程按自身 bounds 累加(避免 DPI 换算漂移)。
+// width = 拖宽(横形右缘/竖形右缘),height = 拖高(竖形底缘,绝对值 = 起始窗口高 + 光标位移) =====
+const beginMinimalResize = (e: MouseEvent, mode: 'width' | 'height'): void => {
   if (e.button !== 0) return
   e.preventDefault()
-  let lastX = e.screenX
-  const onMove = (ev: MouseEvent): void => {
-    const delta = ev.screenX - lastX
-    lastX = ev.screenX
-    if (delta !== 0) window.paletteApi?.resizeMinimal?.(delta, null)
+  // 主进程宽度下限按布局传入:竖形内容窄,沿用横形的 360 下限会把竖形越拖越宽
+  const minWidth = minimalLayout.value === 'vertical' ? 140 : 360
+  let onMove: (ev: MouseEvent) => void
+  if (mode === 'height') {
+    const startH = window.innerHeight
+    const startY = e.screenY
+    onMove = (ev: MouseEvent): void => {
+      window.paletteApi?.resizeMinimal?.(null, Math.max(120, startH + (ev.screenY - startY)), minWidth)
+    }
+  } else {
+    let lastX = e.screenX
+    onMove = (ev: MouseEvent): void => {
+      const delta = ev.screenX - lastX
+      lastX = ev.screenX
+      if (delta !== 0) window.paletteApi?.resizeMinimal?.(delta, null, minWidth)
+    }
   }
   const onUp = (): void => {
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
     document.body.style.userSelect = ''
-    try {
-      localStorage.setItem(MINIMAL_WIDTH_KEY, String(window.innerWidth))
-    } catch {
-      /* ignore */
+    if (mode === 'width') {
+      const key = minimalLayout.value === 'vertical' ? MINIMAL_WIDTH_V_KEY : MINIMAL_WIDTH_KEY
+      try {
+        localStorage.setItem(key, String(window.innerWidth))
+      } catch {
+        /* ignore */
+      }
     }
     syncMinimalHeight()
   }
@@ -975,15 +1042,96 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-/* 右缘宽度拖拽把手 */
+/* 右缘宽度拖拽把手:12px 热区 + 悬停高亮,太窄在高分屏上几乎抓不住 */
 .minimal-resize {
   flex: none;
-  width: 8px;
+  width: 12px;
   align-self: stretch;
   margin-left: 2px;
   cursor: ew-resize;
   -webkit-app-region: no-drag;
   border-left: 1px solid var(--border-secondary, #404040);
+}
+
+.minimal-resize:hover,
+.minimal-resize-w:hover {
+  background: var(--overlay-hover, #37383d);
+}
+
+/* ===== 竖形布局:grid 三行(组+状态+控件 / 任务纵列 / 底缘调高把手),最右列 = 调宽把手 ===== */
+.minimal-bar.vertical {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto 12px;
+  grid-template-areas:
+    'group status controls grip'
+    'tasks tasks tasks grip'
+    'handle handle handle handle';
+  row-gap: 4px;
+  padding: 4px 4px 2px 8px;
+}
+
+/* 竖形右缘调宽把手(横形无此元素) */
+.minimal-resize-w {
+  display: none;
+}
+
+.minimal-bar.vertical .minimal-resize-w {
+  display: block;
+  grid-area: grip;
+  cursor: ew-resize;
+  -webkit-app-region: no-drag;
+  border-left: 1px solid var(--border-secondary, #404040);
+  margin: 0 0 4px;
+}
+
+.minimal-bar.vertical .minimal-group {
+  grid-area: group;
+  width: auto;
+  min-width: 0;
+}
+
+.minimal-bar.vertical .minimal-status {
+  grid-area: status;
+  align-self: center;
+}
+
+.minimal-bar.vertical .minimal-controls {
+  grid-area: controls;
+  margin-left: 0;
+}
+
+.minimal-bar.vertical .minimal-tasks {
+  grid-area: tasks;
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  row-gap: 4px;
+  /* 任务过多时列内滚动,高度封顶避免窗口超出屏幕(预留组行/状态/输出区) */
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+}
+
+.minimal-bar.vertical .minimal-task-btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.minimal-bar.vertical .minimal-task-btn :deep(span) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 竖形下把手转到底缘,职责变为拖高;热区同样加大 */
+.minimal-bar.vertical .minimal-resize {
+  grid-area: handle;
+  width: auto;
+  height: 12px;
+  margin: 2px 0 0;
+  cursor: ns-resize;
+  border-left: none;
+  border-top: 1px solid var(--border-secondary, #404040);
 }
 
 .minimal-empty {

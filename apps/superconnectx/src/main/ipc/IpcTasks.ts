@@ -139,21 +139,29 @@ export default class IpcTasks {
     ipcMain.handle('palette:set-minimal', (_, minimal: boolean, contentWidth?: number, barHeight?: number) => {
       const win = this.paletteWindow
       if (!win || win.isDestroyed()) return { success: false }
+      const wasMinimal = this.paletteMinimal
       this.paletteMinimal = minimal === true
       if (this.paletteMinimal) {
-        // 先取消最大化:setBounds 对最大化窗口不生效,会导致小条悬浮在满屏窗口中央
-        this.palettePreMinimalMaximized = win.isMaximized()
-        if (this.palettePreMinimalMaximized) win.unmaximize()
-        this.palettePreMinimalBounds = win.getNormalBounds()
+        // 仅从完整模式首次进入时记录还原基准:极简期内(如横竖布局切换)重复调用
+        // 会把小条尺寸误存为还原目标。先取消最大化:setBounds 对最大化窗口不生效
+        if (!wasMinimal) {
+          this.palettePreMinimalMaximized = win.isMaximized()
+          if (this.palettePreMinimalMaximized) win.unmaximize()
+          this.palettePreMinimalBounds = win.getNormalBounds()
+        }
         const measured = Number(contentWidth)
-        const width = Number.isFinite(measured) && measured > 0 ? Math.ceil(measured) : this.palettePreMinimalBounds.width
+        const currentBounds = win.getBounds()
+        const fallbackWidth = wasMinimal ? currentBounds.width : (this.palettePreMinimalBounds?.width ?? currentBounds.width)
+        const width = Number.isFinite(measured) && measured > 0 ? Math.ceil(measured) : fallbackWidth
         // 命令条任务按钮支持换行,高度随行数变化,由渲染层实测传入(36 为单行兜底)
         const MINIMAL_OUTPUT_HEIGHT = 2 * 19 + 4
         const measuredBarHeight = Number(barHeight)
         const height = (Number.isFinite(measuredBarHeight) && measuredBarHeight > 0 ? Math.ceil(measuredBarHeight) : 36) + MINIMAL_OUTPUT_HEIGHT
         // 窗口创建时的 minHeight 320 会钳制 setBounds,先放开最小尺寸
         win.setMinimumSize(width, height)
-        win.setBounds({ x: this.palettePreMinimalBounds.x, y: this.palettePreMinimalBounds.y, width, height })
+        // 重复调用(布局切换)保持当前位置,不把窗口拽回进入极简时的位置
+        const base = wasMinimal ? currentBounds : (this.palettePreMinimalBounds ?? currentBounds)
+        win.setBounds({ x: base.x, y: base.y, width, height })
         win.setAlwaysOnTop(true)
       } else {
         win.setAlwaysOnTop(false)
@@ -168,19 +176,22 @@ export default class IpcTasks {
 
     // 极简模式运行期调宽/调高:宽度走增量(渲染层拖把手,主进程按自身 bounds 累加避免 DPI 换算漂移),
     // 高度走绝对值(换行行数变化后渲染层实测同步)。命令条 drag 区覆盖窗口边缘,原生边缘 resize 抓不到
-    ipcMain.handle('palette:resize-minimal', (_, widthDelta?: number, height?: number) => {
+    ipcMain.handle('palette:resize-minimal', (_, widthDelta?: number, height?: number, minWidth?: number) => {
       const win = this.paletteWindow
       if (!win || win.isDestroyed() || !this.paletteMinimal) return { success: false }
       const bounds = win.getBounds()
+      const workArea = screen.getDisplayMatching(bounds).workArea
       const next: { width?: number; height?: number } = {}
       const delta = Number(widthDelta)
       if (Number.isFinite(delta) && delta !== 0) {
-        const workArea = screen.getDisplayMatching(bounds).workArea
-        next.width = Math.round(Math.min(Math.max(bounds.width + delta, MINIMAL_MIN_WIDTH), workArea.width))
+        // 宽度下限按布局由渲染层传入(横形 360/竖形 140),缺省回退全局下限
+        const minW = Number.isFinite(minWidth) && Number(minWidth) > 0 ? Number(minWidth) : MINIMAL_MIN_WIDTH
+        next.width = Math.round(Math.min(Math.max(bounds.width + delta, minW), workArea.width))
       }
       const absHeight = Number(height)
       if (Number.isFinite(absHeight) && absHeight > 0) {
-        next.height = Math.round(absHeight)
+        // 竖形底缘拖高:夹在 80px 与屏幕工作区高之间,避免拖出屏幕
+        next.height = Math.round(Math.min(Math.max(absHeight, 80), workArea.height))
       }
       if (next.width !== undefined || next.height !== undefined) {
         // 先放开最小尺寸再 setBounds:缩小方向的 setBounds 会被旧最小尺寸钳制

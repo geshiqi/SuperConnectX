@@ -199,7 +199,8 @@ declare global {
       setMinimal: (minimal: boolean, contentWidth?: number, barHeight?: number) => Promise<{ success: boolean }>
       resizeMinimal: (
         widthDelta: number | null,
-        height: number | null
+        height: number | null,
+        minWidth?: number
       ) => Promise<{ success: boolean; width?: number; height?: number }>
       notifyTheme: (theme: string) => void
       getTheme: () => Promise<string | null>
