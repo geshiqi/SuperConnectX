@@ -203,10 +203,20 @@ export default class IpcSerialPort {
           return
         }
         const parsed = IpcSerialPort.parseWindowsUsbPathOutput(stdout)
+        const changed =
+          parsed.size !== this.windowsUsbPaths.size ||
+          [...parsed].some(([com, path]) => this.windowsUsbPaths.get(com) !== path)
         this.windowsUsbPaths.clear()
         for (const [com, path] of parsed) this.windowsUsbPaths.set(com, path)
         this.windowsUsbPathSignature = portSignature
         logger.info(`usb path supplement: found ${this.windowsUsbPaths.size} usb port paths`)
+        // 路径就绪晚于首次列表(PowerShell 冷启数秒),端口集合未变时热插拔监听不会推送,
+        // 需主动推一次带路径的列表,否则界面要等真实热插拔/手动刷新才显示
+        if (changed) {
+          this.listSerialPorts(false)
+            .then((ports) => this.windows?.mainWindow?.webContents?.send('on-serial-ports-changed', ports))
+            .catch(() => {})
+        }
       }
     )
   }
