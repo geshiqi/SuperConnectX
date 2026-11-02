@@ -13,6 +13,8 @@ interface SerialPortInfo {
   serialNumber?: string
   pnpId?: string
   locationId?: string
+  /** Windows USB 物理拓扑路径(如 8.3.3.2.3,对齐 finduart 口径);非 USB 口/其他平台无此值 */
+  usbPath?: string
   friendlyName?: string
   vendorId?: string
   productId?: string

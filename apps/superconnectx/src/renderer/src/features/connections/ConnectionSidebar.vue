@@ -58,11 +58,14 @@
                             <div v-if="port.serialNumber" class="port-detail-row"><span class="port-detail-label">{{ t('sidebar.serialNumber') }}:</span> {{ port.serialNumber }}</div>
                             <div v-if="port.pnpId" class="port-detail-row"><span class="port-detail-label">PnP ID:</span> {{ port.pnpId }}</div>
                             <div v-if="port.locationId" class="port-detail-row"><span class="port-detail-label">{{ t('sidebar.locationId') }}:</span> {{ port.locationId }}</div>
+                            <div v-if="port.usbPath" class="port-detail-row"><span class="port-detail-label">{{ t('sidebar.usbPath') }}:</span> {{ port.usbPath }}</div>
                           </div>
                         </template>
                         <div class="serial-port-device" tabindex="0">
                           <div class="serial-port-row">
                             <span class="conn-name" :title="port.path">{{ getSerialPortDisplayName(port.path) }}</span>
+                            <!-- USB 物理拓扑路径(对齐 finduart 的 8.3.3.2.3 口径),非 USB 口无此值 -->
+                            <span v-if="port.usbPath" class="serial-usb-path" :title="t('sidebar.usbPath')">{{ port.usbPath }}</span>
                             <span v-if="showPortType" class="serial-port-type">
                               <el-tag v-if="port.type === 'virtual'" type="info" size="small" effect="dark">{{ t('sidebar.virtual') }}</el-tag>
                               <el-tag v-else-if="port.type === 'usb'" type="success" size="small" effect="dark">{{ t('sidebar.usb') }}</el-tag>
@@ -245,7 +248,8 @@ const hasPortDetails = (port: SerialPortInfo): boolean => {
     port.productId ||
     port.serialNumber ||
     port.pnpId ||
-    port.locationId
+    port.locationId ||
+    port.usbPath
   )
 }
 
@@ -537,6 +541,14 @@ const toggleGroupExpanded = (type: string) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* USB 物理拓扑路径(如 8.3.3.2.3):等宽小字,跟随端口名显示 */
+.serial-usb-path {
+  margin-left: 6px;
+  color: var(--sidebar-remark);
+  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  font-size: 11px;
 }
 
 .port-detail-tooltip {

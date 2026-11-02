@@ -312,6 +312,20 @@ describe('IpcSerialPort', () => {
     })
   })
 
+  describe('parseWindowsUsbPathOutput', () => {
+    it('解析 COM|拓扑路径 行并忽略杂音行(跨平台纯函数)', () => {
+      const stdout = ['COM72|8.3.3.2.3', 'COM19|8.3.3.2.2', '', 'garbage', 'COM|1.2'].join('\r\n')
+      const map = IpcSerialPort.parseWindowsUsbPathOutput(stdout)
+      expect(map.size).toBe(2)
+      expect(map.get('COM72')).toBe('8.3.3.2.3')
+      expect(map.get('COM19')).toBe('8.3.3.2.2')
+    })
+
+    it('空输出返回空映射', () => {
+      expect(IpcSerialPort.parseWindowsUsbPathOutput('').size).toBe(0)
+    })
+  })
+
   describe('init', () => {
     it('should have init method', () => {
       const instance = IpcSerialPort.getInstance()

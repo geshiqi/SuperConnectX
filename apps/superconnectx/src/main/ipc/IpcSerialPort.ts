@@ -10,6 +10,25 @@ interface WindowsRef {
   mainWindow?: { webContents?: { send: (channel: string, ...args: unknown[]) => void } } | null
 }
 
+/**
+ * Windows USB 物理拓扑路径批量查询(输出每行 COMxx|8.3.3.2.3):
+ * 取 LocationPaths 中 PCIROOT 开头且不含 USBMI 的首条,把 USBROOT 之后每个 USB(n) 的
+ * 数字点连。已实测与 finduart 输出逐口一致;蓝牙/板载口无 PCIROOT 路径,自然无输出
+ */
+const WINDOWS_USB_PATH_PS = `
+Get-PnpDevice -Class Ports -PresentOnly | ForEach-Object {
+  $com = if ($_.FriendlyName -match '\\((COM\\d+)\\)') { $Matches[1] } else { $null }
+  if (-not $com) { return }
+  $lp = (Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName 'DEVPKEY_Device_LocationPaths' -ErrorAction SilentlyContinue).Data
+  $pci = @($lp | Where-Object { $_ -like 'PCIROOT*' -and $_ -notlike '*USBMI*' }) | Select-Object -First 1
+  if ($pci) {
+    $tail = $pci -replace '^.*USBROOT\\(\\d+\\)', ''
+    $nums = [regex]::Matches($tail, 'USB\\((\\d+)\\)') | ForEach-Object { $_.Groups[1].Value }
+    if ($nums.Count -gt 0) { "$com|$($nums -join '.')" }
+  }
+}
+`
+
 export default class IpcSerialPort {
   private static sInstance: IpcSerialPort
   private windows: WindowsRef | null = null
@@ -85,6 +104,12 @@ export default class IpcSerialPort {
         (port, index, allPorts) => allPorts.findIndex((candidate) => candidate.path === port.path) === index
       )
 
+      // Windows:USB 物理拓扑路径(如 8.3.3.2.3)缓存补充。仅在端口集合变化或缓存超期时
+      // 后台刷新(查询要起一次 PowerShell,不能跟随 2s 热插拔轮询每次执行)
+      if (platform === 'win32') {
+        this.refreshWindowsUsbPaths(uniquePorts.map((port) => port.path).sort().join(','))
+      }
+
       if (logResult) logger.info(`filtered to ${uniquePorts.length} serial ports`)
       return uniquePorts.map((port) => ({
         path: port.path,
@@ -92,6 +117,7 @@ export default class IpcSerialPort {
         serialNumber: port.serialNumber,
         pnpId: port.pnpId,
         locationId: port.locationId,
+        usbPath: platform === 'win32' ? this.windowsUsbPaths.get((port.path || '').toUpperCase()) : undefined,
         friendlyName: port.friendlyName,
         vendorId: port.vendorId,
         productId: port.productId
@@ -132,6 +158,57 @@ export default class IpcSerialPort {
         }
       )
     })
+  }
+
+  // ===== Windows USB 物理拓扑路径(如 COM72 -> 8.3.3.2.3,对齐 finduart 口径) =====
+  // serialport 的 locationId 只有最后一跳(Port_#x.Hub_#y),完整链需读 SetupAPI 的
+  // DEVPKEY_Device_LocationPaths。Node 无现成库直读该属性,用一次性 PowerShell 批量查询;
+  // 稳态(端口集合未变)零进程开销,仅热插拔/超期时后台刷新一次
+
+  private static readonly USB_PATH_TTL_MS = 60_000
+  private readonly windowsUsbPaths = new Map<string, string>()
+  private windowsUsbPathSignature = ''
+  private windowsUsbPathRefreshedAt = 0
+  private windowsUsbPathRefreshing = false
+
+  /** 解析 PowerShell 输出(每行 COMxx|8.3.3.2.3);纯函数便于单测 */
+  static parseWindowsUsbPathOutput(stdout: string): Map<string, string> {
+    const map = new Map<string, string>()
+    for (const line of stdout.split(/\r?\n/)) {
+      const match = line.match(/^(COM\d+)\|([\d.]+)$/)
+      if (match) map.set(match[1].toUpperCase(), match[2])
+    }
+    return map
+  }
+
+  private refreshWindowsUsbPaths(portSignature: string): void {
+    if (this.windowsUsbPathRefreshing) return
+    if (
+      portSignature === this.windowsUsbPathSignature &&
+      Date.now() - this.windowsUsbPathRefreshedAt < IpcSerialPort.USB_PATH_TTL_MS
+    ) {
+      return
+    }
+    this.windowsUsbPathRefreshing = true
+    execFile(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_USB_PATH_PS],
+      { encoding: 'utf-8', timeout: 15000, windowsHide: true },
+      (error, stdout) => {
+        this.windowsUsbPathRefreshing = false
+        this.windowsUsbPathRefreshedAt = Date.now()
+        if (error) {
+          // 不更新 signature:下次端口集合变化时重试
+          logger.info('usb path supplement: powershell query failed')
+          return
+        }
+        const parsed = IpcSerialPort.parseWindowsUsbPathOutput(stdout)
+        this.windowsUsbPaths.clear()
+        for (const [com, path] of parsed) this.windowsUsbPaths.set(com, path)
+        this.windowsUsbPathSignature = portSignature
+        logger.info(`usb path supplement: found ${this.windowsUsbPaths.size} usb port paths`)
+      }
+    )
   }
 
   /**

@@ -277,7 +277,8 @@
     "friendlyName": "Friendly Name",
     "manufacturer": "Manufacturer",
     "serialNumber": "Serial Number",
-    "locationId": "Location ID"
+    "locationId": "Location ID",
+    "usbPath": "USB port path"
   },
   "tabs": {
     "disconnectAll": "Disconnect All",
