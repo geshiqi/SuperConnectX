@@ -169,6 +169,13 @@
             </div>
             <div class="setting-item">
               <div class="setting-label">
+                <span class="label-text">{{ t('serialSettings.showUsbPath') }}</span>
+                <span class="label-desc">{{ t('serialSettings.showUsbPathDesc') }}</span>
+              </div>
+              <el-switch class="terminal-switch" v-model="settings.showSerialPortUsbPath" />
+            </div>
+            <div class="setting-item">
+              <div class="setting-label">
                 <span class="label-text">{{ t('serialSettings.showFriendlyName') }}</span>
                 <span class="label-desc">{{ t('serialSettings.showFriendlyNameDesc') }}</span>
               </div>

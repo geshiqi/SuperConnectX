@@ -106,6 +106,8 @@
     "supportedBaudRatesDesc": "Manage available baud rates for serial connection",
     "addNew": "Add New",
     "showPortType": "Show Port Type",
+    "showUsbPath": "Show USB Port Path",
+    "showUsbPathDesc": "Show USB physical topology path after COM name (e.g. 8.3.3.2.3, Windows only)",
     "showPortTypeDesc": "Show type labels in port list (Virtual, USB, Bluetooth)",
     "showFriendlyName": "Show Device Friendly Name",
     "showFriendlyNameDesc": "Show the system-provided device name below the COM port",

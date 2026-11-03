@@ -106,6 +106,8 @@
     "supportedBaudRatesDesc": "管理串口连接时可选的波特率",
     "addNew": "新增",
     "showPortType": "显示串口类型",
+    "showUsbPath": "显示 USB 口路径",
+    "showUsbPathDesc": "在 COM 号后显示 USB 物理拓扑路径（如 8.3.3.2.3，仅 Windows）",
     "showPortTypeDesc": "在串口列表中显示类型标签（虚拟串口、USB、蓝牙）",
     "showFriendlyName": "显示设备友好名称",
     "showFriendlyNameDesc": "在 COM 号下方显示系统提供的设备名称",

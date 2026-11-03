@@ -12,6 +12,7 @@ import LogFilterStorage from '../storage/LogFilterStorage'
 import UserTaskStorage from '../storage/UserTaskStorage'
 import IpcConnector from './IpcConnector'
 import IpcTasks from './IpcTasks'
+import IpcSerialPort from './IpcSerialPort'
 import BackupManager from '../utils/BackupManager'
 import fs from 'fs'
 import path from 'path'
@@ -113,6 +114,10 @@ export default class IpcStorage {
     ipcMain.handle(STORAGE_IPC_CHANNELS.getDefaultSettings, () => settingsStorage.getDefaults())
     ipcMain.handle(STORAGE_IPC_CHANNELS.saveSettings, (_, settings: any) => {
       settingsStorage.saveSettings(settings)
+      // USB 拓扑路径显示开关需实时生效(切换后立即重推端口列表)
+      if (settings.showSerialPortUsbPath !== undefined) {
+        IpcSerialPort.getInstance().applySettings({ showSerialPortUsbPath: settings.showSerialPortUsbPath })
+      }
       // 日志分片开关和大小需实时生效，无需重启；0 也必须下发用于关闭分片。
       if (settings.logSplit !== undefined || settings.logSplitSize !== undefined) {
         IpcConnector.getInstance().applySettings({

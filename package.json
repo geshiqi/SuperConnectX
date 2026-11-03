@@ -70,6 +70,7 @@
     "element-plus": "^2.11.9",
     "ftp-srv": "^4.6.3",
     "iconv-lite": "^0.7.3",
+    "koffi": "^3.3.6",
     "monaco-editor": "^0.55.1",
     "serialport": "^13.0.0",
     "sortablejs": "^1.15.7",
@@ -83,8 +84,8 @@
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
-    "@electron/rebuild": "^3.6.1",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@electron/rebuild": "^3.6.1",
     "@playwright/test": "^1.62.1",
     "@types/adm-zip": "^0.5.8",
     "@types/archiver": "^8.0.0",

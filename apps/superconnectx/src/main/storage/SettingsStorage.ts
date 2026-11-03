@@ -102,6 +102,8 @@ const defaultSettings: Settings = {
   // 串口设置
   supportedBaudRates: [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600, 1500000],
   showPortType: true,
+  // Windows 串口列表显示 USB 物理拓扑路径(如 8.3.3.2.3)
+  showSerialPortUsbPath: false,
   showSerialPortFriendlyName: true,
   showSerialPortDetails: false,
   // 日志

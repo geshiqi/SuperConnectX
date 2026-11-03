@@ -15,6 +15,7 @@ allowBuilds:
   '@serialport/bindings-cpp': true
   electron: true
   esbuild: true
+  koffi: false
   ssh2: true
 
 # 故意静默忽略的 optional 原生依赖（Windows 上必然编译失败，且运行时无此依赖也能正常工作）
