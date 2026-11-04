@@ -418,13 +418,15 @@ const handleConfirmAddPair = async () => {
     if (result.success) {
       ElMessage.success(t('virtualPort.addPairSuccess'))
       addPairDialogVisible.value = false
-      await refreshPorts()
     } else {
       ElMessage.error(result.error || t('virtualPort.addPairFailed'))
+      // 判定失败也可能实际已创建(版本措辞差异等),刷新以真实状态为准
     }
+    await refreshPorts()
   } catch (error) {
     console.error('[VirtualPortPage] insertPair failed:', error)
     ElMessage.error(t('virtualPort.addPairFailed'))
+    await refreshPorts()
   } finally {
     addPairLoading.value = false
   }
@@ -468,10 +470,11 @@ const handleDeletePair = async (row: VirtualPortRow) => {
     const result = await window.virtualPortApi.deletePair(index)
     if (result.success) {
       ElMessage.success(t('virtualPort.deletePairSuccess'))
-      await refreshPorts()
     } else {
       ElMessage.error(result.error || t('virtualPort.deletePairFailed'))
+      // 判定失败也可能实际已删除(版本措辞差异等),刷新以真实状态为准
     }
+    await refreshPorts()
   } catch (error) {
     // 用户取消也会走到这里
     if (error !== 'cancel' && error !== 'close') {

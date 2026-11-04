@@ -66,6 +66,11 @@ function resolveExec(error: Error | null, stdout: string, stderr: string = ''): 
   }
 }
 
+// 辅助：排空微任务队列,让 exec 的 Promise 链完全展开(链路较深,单个 await 不够)
+async function flushMicrotasks(times = 8): Promise<void> {
+  for (let i = 0; i < times; i++) await Promise.resolve()
+}
+
 // 辅助：设置 execSetupCmdAdmin 模式下读取到的 setupc stdout
 function setAdminOutput(stdout: string, stderr: string = ''): void {
   presetAdminStdout = stdout
@@ -176,9 +181,13 @@ describe('VirtualPortManager', () => {
   })
 
   describe('listAllPorts', () => {
+    // list 走提权执行:powershell 回调触发后,setupc 输出从临时文件读取(setAdminOutput 预设)
     it('成功解析一对串口', async () => {
+      setAdminOutput('CNCA0 PortName=COM2,EmuBR=yes,EmuOverrun=yes\nCNCB0 PortName=COM4,EmuBR=yes,EmuOverrun=yes\n')
       const promise = manager.listAllPorts()
-      resolveExec(null, 'CNCA0 PortName=COM2,EmuBR=yes,EmuOverrun=yes\nCNCB0 PortName=COM4,EmuBR=yes,EmuOverrun=yes\n')
+      // 串行队列使 exec 发起晚一拍,先 flush 再触发回调
+      await flushMicrotasks()
+      resolveExec(null, '') // 触发 powershell exec 回调
 
       const ports = await promise
       expect(ports).toHaveLength(2)
@@ -194,6 +203,7 @@ describe('VirtualPortManager', () => {
 
     it('exec 错误时返回空数组', async () => {
       const promise = manager.listAllPorts()
+      await flushMicrotasks()
       resolveExec(new Error('command failed'), '', 'some error')
 
       const ports = await promise
@@ -202,6 +212,7 @@ describe('VirtualPortManager', () => {
 
     it('空输出返回空数组', async () => {
       const promise = manager.listAllPorts()
+      await flushMicrotasks()
       resolveExec(null, '', '')
 
       const ports = await promise
@@ -210,33 +221,42 @@ describe('VirtualPortManager', () => {
   })
 
   describe('insertPort', () => {
-    it('成功安装串口对', async () => {
+    // 新逻辑:install(提权)后跑 list(提权)验证端口真实出现,不依赖 install 输出措辞。
+    // 提权路径下 setupc 输出经临时文件回读,需在触发 powershell 回调前 setAdminOutput 预设
+    it('成功安装串口对:list 中两个端口名都出现', async () => {
       const portA = new VirtualPort('COM10')
       const portB = new VirtualPort('COM11')
 
       expect(manager.isReady()).toBe(true)
 
       const promise = manager.insertPort(portA, portB)
+      await flushMicrotasks()
+      expect(execCallbacks.length).toBe(1) // install 的 powershell
+      setAdminOutput('whatever install output\n')
+      resolveExec(null, '')
 
-      // 给 microtask 时间让 exec 被调用
-      await Promise.resolve()
-
-      expect(mockExec).toHaveBeenCalledTimes(1)
+      await flushMicrotasks()
+      expect(mockExec).toHaveBeenCalledTimes(2) // 第二次调用为 list 验证
       expect(execCallbacks.length).toBe(1)
-
-      resolveExec(null, 'CNCA0 logged as "in use"\nCNCB0 logged as "in use"\n')
+      setAdminOutput('CNCA0 PortName=COM10,EmuBR=no\nCNCB0 PortName=COM11,EmuBR=no\n')
+      resolveExec(null, '')
 
       const result = await promise
       expect(result).toBe(true)
     })
 
-    it('只匹配一个 in use 返回 false', async () => {
+    it('list 中缺少任一端口名返回 false', async () => {
       const portA = new VirtualPort('COM10')
       const portB = new VirtualPort('COM11')
 
       const promise = manager.insertPort(portA, portB)
-      await Promise.resolve()
-      resolveExec(null, 'CNCA0 logged as "in use"\n')
+      await flushMicrotasks()
+      setAdminOutput('ok\n')
+      resolveExec(null, '')
+      await flushMicrotasks()
+      // 只出现了 COM10,COM11 未创建
+      setAdminOutput('CNCA0 PortName=COM10,EmuBR=no\n')
+      resolveExec(null, '')
 
       const result = await promise
       expect(result).toBe(false)
@@ -260,8 +280,13 @@ describe('VirtualPortManager', () => {
       const portB = new VirtualPort('COM11')
 
       const promise = manager.insertPort(portA, portB)
-      await Promise.resolve()
+      await flushMicrotasks()
+      // admin 路径 powershell 失败也 resolve(以临时文件为准),流程继续走 list 验证
+      setAdminOutput('')
       resolveExec(new Error('install failed'), '', 'error')
+      await flushMicrotasks()
+      setAdminOutput('') // list 也拿不到输出 -> 两个端口名都不在 -> false
+      resolveExec(null, '')
 
       const result = await promise
       expect(result).toBe(false)
@@ -269,19 +294,31 @@ describe('VirtualPortManager', () => {
   })
 
   describe('deletePort', () => {
-    it('成功删除串口对', async () => {
+    // 新逻辑:remove(提权)后跑 list(提权)验证 CNCA{n}/CNCB{n} 不再出现
+    it('成功删除串口对:list 中该对不再出现', async () => {
       const promise = manager.deletePort(0)
-      await Promise.resolve()
-      resolveExec(null, 'Removed CNCA0\nRemoved CNCB0\n')
+      await flushMicrotasks()
+      setAdminOutput('whatever remove output\n')
+      resolveExec(null, '')
+
+      await flushMicrotasks()
+      expect(mockExec).toHaveBeenCalledTimes(2)
+      expect(execCallbacks.length).toBe(1)
+      setAdminOutput('CNCA1 PortName=COM5\nCNCB1 PortName=COM6\n') // 只剩别的对
+      resolveExec(null, '')
 
       const result = await promise
       expect(result).toBe(true)
     })
 
-    it('只删除一个返回 false', async () => {
+    it('list 中该对仍存在返回 false', async () => {
       const promise = manager.deletePort(0)
-      await Promise.resolve()
-      resolveExec(null, 'Removed CNCA0\n')
+      await flushMicrotasks()
+      setAdminOutput('ok\n')
+      resolveExec(null, '')
+      await flushMicrotasks()
+      setAdminOutput('CNCA0 PortName=COM10\nCNCB0 PortName=COM11\n')
+      resolveExec(null, '')
 
       const result = await promise
       expect(result).toBe(false)
@@ -307,7 +344,7 @@ describe('VirtualPortManager', () => {
 
       setAdminOutput('Restarted CNCA0\n')
       const promise = manager.updatePorts([port])
-      await Promise.resolve()
+      await flushMicrotasks()
       resolveExec(null, '') // 触发 powershell exec 回调
 
       const result = await promise
@@ -331,7 +368,7 @@ describe('VirtualPortManager', () => {
 
       setAdminOutput('Some other output\n')
       const promise = manager.updatePorts([port])
-      await Promise.resolve()
+      await flushMicrotasks()
       resolveExec(null, '')
 
       const result = await promise
@@ -345,7 +382,7 @@ describe('VirtualPortManager', () => {
       // 不设置 admin output，也不 resolve exec — 直接抛异常的场景
       // 这里我们测试 admin exec 本身报错的情况
       const promise = manager.updatePorts([port])
-      await Promise.resolve()
+      await flushMicrotasks()
       resolveExec(new Error('powershell error'), '', 'access denied')
 
       const result = await promise

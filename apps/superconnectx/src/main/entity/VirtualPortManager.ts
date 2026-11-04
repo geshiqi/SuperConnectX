@@ -178,112 +178,81 @@ export default class VirtualPortManager {
 
   // ==================== 命令执行 ====================
 
-  /**
-   * 执行 setupc 命令，返回 stdout 的每一行
-   */
-  private execSetupCmd(args: string): Promise<string[]> {
-    return new Promise((resolve, reject) => {
-      if (!this.isReady()) {
-        reject(new Error('setupc.exe not found or not initialized'))
-        return
-      }
-
-      const cmd = `cd /d "${this.appDir}" && ${VirtualPortManager.EXE_NAME} ${args}`
-      logger.info(`VirtualPortManager exec: ${cmd}`)
-
-      exec(
-        cmd,
-        {
-          timeout: VirtualPortManager.CMD_TIMEOUT,
-          maxBuffer: 1024 * 1024, // 1MB
-          windowsHide: true
-        },
-        (error: ExecException | null, stdout: string, stderr: string) => {
-          if (stderr) {
-            logger.info(`VirtualPortManager stderr: ${stderr}`)
-          }
-          if (error) {
-            // setupc 某些情况下即使成功也可能返回非 0 退出码
-            // 如果有 stdout 输出，仍然尝试返回
-            if (stdout && stdout.trim()) {
-              resolve(stdout.split('\n').map((l) => l.trim()).filter(Boolean))
-              return
-            }
-            logger.error(`VirtualPortManager exec error: ${error.message}`)
-            reject(error)
-            return
-          }
-          const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
-          resolve(lines)
-        }
-      )
-    })
-  }
+  // 提权命令串行队列:同时只跑一个 setupc(避免连发多个 UAC 弹窗/驱动并发操作),
+  // 后续命令排队执行
+  private adminCmdQueue: Promise<string[]> = Promise.resolve([])
 
   /**
    * 以管理员权限执行 setupc 命令
    * 通过 PowerShell Start-Process -Verb RunAs 提权，输出重定向到临时文件
    */
   private execSetupCmdAdmin(args: string): Promise<string[]> {
-    return new Promise((resolve, reject) => {
-      if (!this.isReady()) {
-        reject(new Error('setupc.exe not found or not initialized'))
-        return
-      }
-
-      const cmd = `cd /d "${this.appDir}" && ${VirtualPortManager.EXE_NAME} ${args}`
-      const outFile = path.join(os.tmpdir(), `setupc_out_${Date.now()}.txt`)
-      const errFile = path.join(os.tmpdir(), `setupc_err_${Date.now()}.txt`)
-
-      // 用 PowerShell Start-Process 以管理员身份运行，重定向 stdout/stderr
-      const psCmd = `Start-Process cmd.exe -ArgumentList '/C', '${cmd.replace(/'/g, "''")} > "${outFile}" 2> "${errFile}"' -Verb RunAs -Wait`
-      logger.info(`VirtualPortManager execAdmin: ${cmd}`)
-
-      exec(
-        `powershell -Command "${psCmd.replace(/"/g, '\\"')}"`,
-        {
-          timeout: VirtualPortManager.CMD_TIMEOUT + 5000,
-          maxBuffer: 1024 * 1024,
-          windowsHide: true
-        },
-        (error: ExecException | null, _stdout: string, stderr: string) => {
-          try {
-            if (error) {
-              logger.error(`VirtualPortManager execAdmin powershell error: ${error.message}`)
-            }
-            if (stderr) {
-              logger.info(`VirtualPortManager execAdmin powershell stderr: ${stderr}`)
-            }
-
-            // 读取重定向的输出文件
-            let stdout = ''
-            let setupcStderr = ''
-            try {
-              if (fs.existsSync(outFile)) {
-                stdout = fs.readFileSync(outFile, 'utf-8')
-                fs.unlinkSync(outFile)
-              }
-              if (fs.existsSync(errFile)) {
-                setupcStderr = fs.readFileSync(errFile, 'utf-8')
-                fs.unlinkSync(errFile)
-              }
-            } catch (fileErr) {
-              logger.error(`VirtualPortManager execAdmin read output file error: ${fileErr}`)
-            }
-
-            if (setupcStderr) {
-              logger.info(`VirtualPortManager execAdmin setupc stderr: ${setupcStderr}`)
-            }
-
-            const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
-            logger.info(`VirtualPortManager execAdmin stdout lines: ${JSON.stringify(lines)}`)
-            resolve(lines)
-          } catch (e) {
-            reject(e)
-          }
+    const run = (): Promise<string[]> =>
+      new Promise((resolve, reject) => {
+        if (!this.isReady()) {
+          reject(new Error('setupc.exe not found or not initialized'))
+          return
         }
-      )
-    })
+
+        const cmd = `cd /d "${this.appDir}" && ${VirtualPortManager.EXE_NAME} ${args}`
+        const outFile = path.join(os.tmpdir(), `setupc_out_${Date.now()}.txt`)
+        const errFile = path.join(os.tmpdir(), `setupc_err_${Date.now()}.txt`)
+
+        // 用 PowerShell Start-Process 以管理员身份运行，重定向 stdout/stderr
+        const psCmd = `Start-Process cmd.exe -ArgumentList '/C', '${cmd.replace(/'/g, "''")} > "${outFile}" 2> "${errFile}"' -Verb RunAs -Wait`
+        logger.info(`VirtualPortManager execAdmin: ${cmd}`)
+
+        exec(
+          `powershell -Command "${psCmd.replace(/"/g, '\\"')}"`,
+          {
+            timeout: VirtualPortManager.CMD_TIMEOUT + 5000,
+            maxBuffer: 1024 * 1024,
+            windowsHide: true
+          },
+          (error: ExecException | null, _stdout: string, stderr: string) => {
+            try {
+              if (error) {
+                logger.error(`VirtualPortManager execAdmin powershell error: ${error.message}`)
+              }
+              if (stderr) {
+                logger.info(`VirtualPortManager execAdmin powershell stderr: ${stderr}`)
+              }
+
+              // 读取重定向的输出文件
+              let stdout = ''
+              let setupcStderr = ''
+              try {
+                if (fs.existsSync(outFile)) {
+                  stdout = fs.readFileSync(outFile, 'utf-8')
+                  fs.unlinkSync(outFile)
+                }
+                if (fs.existsSync(errFile)) {
+                  setupcStderr = fs.readFileSync(errFile, 'utf-8')
+                  fs.unlinkSync(errFile)
+                }
+              } catch (fileErr) {
+                logger.error(`VirtualPortManager execAdmin read output file error: ${fileErr}`)
+              }
+
+              if (setupcStderr) {
+                logger.info(`VirtualPortManager execAdmin setupc stderr: ${setupcStderr}`)
+              }
+
+              const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+              logger.info(`VirtualPortManager execAdmin stdout lines: ${JSON.stringify(lines)}`)
+              resolve(lines)
+            } catch (e) {
+              reject(e)
+            }
+          }
+        )
+      })
+
+    // 排队:前一个提权命令完成(无论成败)后再执行本命令
+    const queued = this.adminCmdQueue.then(run, run)
+    // 队列只吞掉错误状态,不中断后续命令
+    this.adminCmdQueue = queued.catch(() => [])
+    return queued
   }
 
   // ==================== 公共 API ====================
@@ -299,7 +268,9 @@ export default class VirtualPortManager {
     if (!this.isReady()) return result
 
     try {
-      const lines = await this.execSetupCmd('list')
+      // 新版 com0com 的 setupc 所有命令都要求管理员权限,普通权限执行输出为空;
+      // 统一走提权执行(会弹一次 UAC)
+      const lines = await this.execSetupCmdAdmin('list')
       for (const line of lines) {
         const port = VirtualPortManager.parseVirtualPort(line)
         if (port) {
@@ -325,14 +296,13 @@ export default class VirtualPortManager {
     if (!this.isReady()) return false
 
     try {
-      const lines = await this.execSetupCmd(`install PortName=${portA.Name} PortName=${portB.Name}`)
-      let count = 0
-      for (const line of lines) {
-        if (line.includes('logged as "in use"')) {
-          count++
-        }
-      }
-      const success = count === 2
+      // 与 list 同理:setupc 要求管理员权限,统一提权执行
+      await this.execSetupCmdAdmin(`install PortName=${portA.Name} PortName=${portB.Name}`)
+      // 不同版本 com0com 的 install 输出措辞不一致(老版 "logged as \"in use\""),
+      // 不能靠输出文本判定;以安装后 list 中两个端口名真实出现为准
+      const ports = await this.listAllPorts()
+      const names = new Set(ports.map((p) => (p.Name || '').toUpperCase()))
+      const success = names.has(portA.Name.toUpperCase()) && names.has(portB.Name.toUpperCase())
       logger.info(`VirtualPortManager insertPort ${portA.Name}<->${portB.Name}: ${success}`)
       return success
     } catch (error) {
@@ -351,14 +321,13 @@ export default class VirtualPortManager {
     if (!this.isReady()) return false
 
     try {
-      const lines = await this.execSetupCmd(`remove ${n}`)
-      let count = 0
-      for (const line of lines) {
-        if (line.includes(`Removed CNCA${n}`) || line.includes(`Removed CNCB${n}`)) {
-          count++
-        }
-      }
-      const success = count === 2
+      // 与 list 同理:setupc 要求管理员权限,统一提权执行
+      await this.execSetupCmdAdmin(`remove ${n}`)
+      // 与 install 同理:remove 的输出措辞随版本变化,以删除后 list 中
+      // CNCA{n}/CNCB{n} 不再出现为准
+      const ports = await this.listAllPorts()
+      const remains = ports.some((p) => p.ID === `CNCA${n}` || p.ID === `CNCB${n}`)
+      const success = !remains
       logger.info(`VirtualPortManager deletePort ${n}: ${success}`)
       return success
     } catch (error) {
