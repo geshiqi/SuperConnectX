@@ -114,9 +114,12 @@
           :key="group.name"
           class="group-tab"
           :class="{ active: activeGroup === group.name }"
+          :draggable="true"
           :title="t('palette.tabDropHint')"
           @click="activeGroup = group.name"
-          @dragover.prevent="onTabDragOver($event)"
+          @dragstart="onTabDragStart(group, $event)"
+          @dragend="onTabDragEnd"
+          @dragover.prevent="onTabDragOver($event, group)"
           @dragleave="onTabDragLeave($event)"
           @drop.stop.prevent="onDropOnTab(group, $event)"
         >
@@ -240,6 +243,7 @@ import { Check } from '@element-plus/icons-vue'
 import type { UserTask, TaskRunEvent } from '../../../shared/tasks/UserTask'
 import TaskEditor from './TaskEditor.vue'
 import { classifyDiagnosticLine } from './diagnostics'
+import { reorderTasksByGroup } from './groupOrder'
 
 const { t } = useI18n()
 
@@ -357,18 +361,71 @@ const onDragLeave = (event: DragEvent): void => {
   ;(event.currentTarget as HTMLElement).classList.remove('drop-hover')
 }
 
-const onTabDragOver = (event: DragEvent): void => {
-  if (!dragTaskId.value) return
-  ;(event.currentTarget as HTMLElement).classList.add('drop-hover')
+const onTabDragOver = (event: DragEvent, group: { name: string }): void => {
+  if (dragTaskId.value) {
+    ;(event.currentTarget as HTMLElement).classList.add('drop-hover')
+    return
+  }
+  // 组标签拖拽:按光标在标签左/右半侧显示插入点指示
+  if (!dragGroupName.value || dragGroupName.value === group.name) return
+  const el = event.currentTarget as HTMLElement
+  const rect = el.getBoundingClientRect()
+  const before = event.clientX < rect.left + rect.width / 2
+  clearTabInsertMarks()
+  el.classList.add(before ? 'insert-before' : 'insert-after')
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
 }
 
 const onTabDragLeave = (event: DragEvent): void => {
   ;(event.currentTarget as HTMLElement).classList.remove('drop-hover')
+  ;(event.currentTarget as HTMLElement).classList.remove('insert-before', 'insert-after')
 }
 
-/** 拖到组标签释放:任务改归该组并置于组末尾 */
+// ===== 组标签拖拽:调整组显示顺序(标签同时是任务拖入改组的目标,两种拖拽并存) =====
+const dragGroupName = ref<string | null>(null)
+
+const onTabDragStart = (group: { name: string }, event: DragEvent): void => {
+  dragGroupName.value = group.name
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', `group:${group.name}`)
+  }
+}
+
+const onTabDragEnd = (): void => {
+  dragGroupName.value = null
+  clearTabInsertMarks()
+}
+
+const clearTabInsertMarks = (): void => {
+  document
+    .querySelectorAll('.group-tab.insert-before, .group-tab.insert-after')
+    .forEach((el) => el.classList.remove('insert-before', 'insert-after'))
+}
+
+/** 组顺序变化:按新组顺序把任务重排为连续块(组内顺序保持)整体写回持久化 */
+const applyGroupOrder = (fromName: string, targetName: string, insertBefore: boolean): void => {
+  const next = reorderTasksByGroup(tasks.value, fromName, targetName, insertBefore)
+  if (!next) return
+  tasks.value = next
+  void persistReorder()
+}
+
+/** 拖到组标签释放:组拖拽则调组顺序;任务拖拽则改归该组并置于组末尾 */
 const onDropOnTab = (group: { name: string }, event: DragEvent): void => {
-  ;(event.currentTarget as HTMLElement).classList.remove('drop-hover')
+  const el = event.currentTarget as HTMLElement
+  el.classList.remove('drop-hover')
+  clearTabInsertMarks()
+  // 组标签拖拽:调整组顺序(与任务拖入改组互斥,优先判定)
+  const dragGroup = dragGroupName.value
+  dragGroupName.value = null
+  if (dragGroup) {
+    if (dragGroup !== group.name) {
+      const rect = el.getBoundingClientRect()
+      applyGroupOrder(dragGroup, group.name, event.clientX < rect.left + rect.width / 2)
+    }
+    return
+  }
   const dragId = dragTaskId.value
   dragTaskId.value = null
   if (!dragId) return
@@ -1191,6 +1248,15 @@ onUnmounted(() => {
 .group-tab.active {
   background: var(--focus-border-color, #409eff);
   color: #fff;
+}
+
+/* 组标签拖拽排序:插入点指示(标签左/右侧竖条) */
+.group-tab.insert-before {
+  box-shadow: -2px 0 0 0 var(--focus-border-color, #409eff);
+}
+
+.group-tab.insert-after {
+  box-shadow: 2px 0 0 0 var(--focus-border-color, #409eff);
 }
 
 .group-tab .tab-count {
