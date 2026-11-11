@@ -70,7 +70,7 @@
 
     <!-- 极简输出区:限高滚动,只保留最近输出 -->
     <div v-if="minimalMode" class="minimal-output" ref="outputBodyRef">
-      <div v-for="(line, i) in minimalOutputLines" :key="i" class="output-line" :class="line.kind">{{ line.text }}</div>
+      <div v-for="(line, i) in minimalOutputLines" :key="i" class="output-line" :class="[line.kind, classifyDiagnosticLine(line.text)]">{{ line.text }}</div>
     </div>
 
     <!-- 完整模式 -->
@@ -220,7 +220,7 @@
         </div>
       </div>
       <div class="output-body" ref="outputBodyRef">
-        <div v-for="(line, i) in outputLines" :key="i" class="output-line" :class="line.kind">{{ line.text }}</div>
+        <div v-for="(line, i) in outputLines" :key="i" class="output-line" :class="[line.kind, classifyDiagnosticLine(line.text)]">{{ line.text }}</div>
       </div>
     </div>
 
@@ -239,6 +239,7 @@ import { useTheme } from '@superx/foundation/theme/useTheme'
 import { Check } from '@element-plus/icons-vue'
 import type { UserTask, TaskRunEvent } from '../../../shared/tasks/UserTask'
 import TaskEditor from './TaskEditor.vue'
+import { classifyDiagnosticLine } from './diagnostics'
 
 const { t } = useI18n()
 
@@ -1360,4 +1361,9 @@ onUnmounted(() => {
 .output-line.stderr { color: #f48771; }
 .output-line.info { color: var(--focus-border-color, #007acc); }
 .output-line.step { color: #4ec9b0; font-weight: 600; }
+
+/* 诊断级着色:按行内容识别编译错误/告警(gcc 系告警在 stdout,仅按流分色时无色);
+   置于按流规则之后,同类名优先级下诊断色优先生效 */
+.output-line.diag-error { color: #f14c4c; }
+.output-line.diag-warning { color: #cca700; }
 </style>
