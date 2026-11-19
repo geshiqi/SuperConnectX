@@ -14,6 +14,7 @@ import SettingsStorage from '../storage/SettingsStorage'
 import ConnectionStorage from '../storage/ConnectionStorage'
 import WorkerConnector from './connectors/WorkerConnector'
 import DirectConnector from './connectors/DirectConnector'
+import SerialMirrorManager from '../mirror/SerialMirrorManager'
 import FtpConnector from './connectors/FtpConnector'
 import ConnectionStateManager from './connectors/ConnectionStateManager'
 import path from 'path'
@@ -79,10 +80,25 @@ export default class IpcConnector {
       },
       (sessionId: string) => {
         this.stateManager.cleanupOnClose(sessionId)
+        // 串口镜像:会话断开联动清理
+        SerialMirrorManager.getInstance().onSessionClosed(sessionId)
         // 同步清理 ftpClients（若存在）
         // FTP cleanup 由 ftpConnector 内部管理，此处通过 stateManager 统一通知即可
       }
     )
+
+    // 串口镜像:注入会话钩子(原始字节 tap 开关 + 经会话发送路径注入设备)
+    SerialMirrorManager.getInstance().attachHooks({
+      enableTap: (sessionId: string, enabled: boolean) => {
+        this.workerConnector.setMirrorTap(sessionId, enabled)
+      },
+      sendToSession: (sessionId: string, command: string) =>
+        this.routeSend({ connectionType: 'com', sessionId }, command)
+    })
+    // 镜像:接收 worker 上报的会话原始字节
+    this.workerConnector.setOnRawData((sessionId: string, chunk: Buffer) => {
+      SerialMirrorManager.getInstance().onSessionRaw(sessionId, chunk)
+    })
 
     // 设置日志分片回调
     _logger.setLogSplitCallback((connId, oldFileName, newFileName) => {
@@ -146,6 +162,10 @@ export default class IpcConnector {
 
     // send-data
     ipcMain.handle('send-data', async (_, { conn, command }: { conn: any; command: string }) => {
+      // 串口镜像:自己终端发送的数据按规则同步转发(仅镜像激活的会话有实际动作)
+      if (conn?.connectionType === 'com' && conn?.sessionId) {
+        SerialMirrorManager.getInstance().onSessionTx(String(conn.sessionId), command)
+      }
       return this.routeSend(conn, command)
     })
 

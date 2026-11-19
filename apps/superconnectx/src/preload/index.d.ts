@@ -192,6 +192,22 @@ declare global {
       onTaskEvent: (callback: (event: import('../shared/tasks/UserTask').TaskRunEvent) => void) => () => void
       onTaskReload: (callback: () => void) => () => void
     }
+    mirrorApi: {
+      start: (payload: {
+        sessionId: string
+        comName: string
+        internalPort: string
+        exposedPort: string
+        config: import('../main/mirror/rules').MirrorConfig
+      }) => Promise<{ success: boolean; message?: string }>
+      stop: (sessionId: string) => Promise<{ success: boolean }>
+      status: () => Promise<unknown[]>
+      updateConfig: (
+        sessionId: string,
+        config: import('../main/mirror/rules').MirrorConfig
+      ) => Promise<{ success: boolean; message?: string }>
+      onMirrorEvent: (callback: (event: { kind: string; sessionId: string; message?: string }) => void) => () => void
+    }
     paletteApi: {
       toggle: () => void
       minimize: () => Promise<{ success: boolean }>

@@ -228,6 +228,20 @@ contextBridge.exposeInMainWorld('taskApi', {
   }
 })
 
+contextBridge.exposeInMainWorld('mirrorApi', {
+  start: (payload: unknown): Promise<{ success: boolean; message?: string }> =>
+    ipcRenderer.invoke('mirror:start', payload),
+  stop: (sessionId: string): Promise<{ success: boolean }> => ipcRenderer.invoke('mirror:stop', sessionId),
+  status: (): Promise<unknown[]> => ipcRenderer.invoke('mirror:status'),
+  updateConfig: (sessionId: string, config: unknown): Promise<{ success: boolean; message?: string }> =>
+    ipcRenderer.invoke('mirror:update-config', sessionId, config),
+  onMirrorEvent: (callback: (event: { kind: string; sessionId: string; message?: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { kind: string; sessionId: string; message?: string }): void => callback(data)
+    ipcRenderer.on('mirror:event', listener)
+    return () => ipcRenderer.removeListener('mirror:event', listener)
+  }
+})
+
 contextBridge.exposeInMainWorld('paletteApi', {
   toggle: (): void => {
     ipcRenderer.send('palette:toggle')

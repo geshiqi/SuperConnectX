@@ -21,6 +21,16 @@ export default class WorkerConnector {
     this.workerPool.setCallbacks(onData, onLog, onClose)
   }
 
+  /** 串口镜像:原始字节回调透传 */
+  setOnRawData(cb: (sessionId: string, chunk: Buffer) => void): void {
+    this.workerPool.setOnRawData(cb)
+  }
+
+  /** 串口镜像:开关会话原始字节 tap */
+  setMirrorTap(sessionId: string, enabled: boolean): void {
+    this.workerPool.setMirrorTap(sessionId, enabled)
+  }
+
   /**
    * 判断连接是否应该使用 Worker 模式
    * - Telnet：纯 JS 协议，可以线程隔离

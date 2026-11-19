@@ -19,17 +19,19 @@ import ConnectionInfo from '../protocol/ConnectionInfo'
 // ===================== 消息类型定义 =====================
 
 interface WorkerMessage {
-  type: 'start' | 'send' | 'stop' | 'update-config' | 'shutdown'
+  type: 'start' | 'send' | 'stop' | 'update-config' | 'shutdown' | 'mirror-set'
   sessionId: string
   connInfo?: ConnectionInfo
   connectionType?: string
   command?: string
   config?: any
   requestId?: string
+  /** mirror-set:开关原始字节 tap */
+  enabled?: boolean
 }
 
 interface WorkerResponse {
-  type: 'ready' | 'start-result' | 'data' | 'log' | 'close' | 'send-result' | 'stop-result' | 'update-config-result' | 'error'
+  type: 'ready' | 'start-result' | 'data' | 'log' | 'close' | 'send-result' | 'stop-result' | 'update-config-result' | 'error' | 'mirror-raw'
   sessionId: string
   requestId?: string
   success?: boolean
@@ -40,6 +42,8 @@ interface WorkerResponse {
   isHex?: boolean
   logStr?: string
   error?: string
+  /** mirror-raw:原始字节 */
+  bytes?: Buffer
 }
 
 // ===================== Worker 内部状态 =====================
@@ -316,6 +320,17 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
       break
     case 'update-config':
       await handleUpdateConfig(msg)
+      break
+    case 'mirror-set':
+      // 串口镜像:开关 ComClient 原始字节 tap;仅串口连接支持(worker 内 client 为 ComClient)
+      if (client && typeof (client as any).setRawTap === 'function') {
+        ;(client as any).setRawTap(
+          msg.sessionId,
+          msg.enabled
+            ? (chunk: Buffer) => postResponse({ type: 'mirror-raw', sessionId: msg.sessionId, bytes: chunk })
+            : null
+        )
+      }
       break
     case 'shutdown':
       // 清理连接（不调用 process.exit，让主线程通过 terminate() 回收）

@@ -36,6 +36,8 @@ interface SerialConnection {
   onData: any
   onClose: any
   onLog: any
+  /** 串口镜像原始字节 tap:解码前逐块回调(仅镜像启用时挂载) */
+  rawTap: ((chunk: Buffer) => void) | null
   receiveHex: boolean
   receiveBatchMs: number
   splitter: BufferLineSplitter
@@ -159,6 +161,7 @@ export default class ComClient extends BaseClient {
             onData: onData,
             onClose: onClose,
             onLog: onLog,
+            rawTap: null,
             receiveHex: info.receiveHex === true,
             receiveBatchMs: normalizeReceiveBatchMs(info.receiveBatchMs),
             splitter: new BufferLineSplitter(encoding, info.receiveHex === true)
@@ -168,6 +171,8 @@ export default class ComClient extends BaseClient {
           // 收集原始 Buffer 数据到缓冲区（不在 data 事件中 toString，避免多字节字符被分割）
           port.on('data', (data: Buffer) => {
             try {
+              // 镜像 tap:解码/分包前的原始字节,保证转发路径二进制无损
+              connection.rawTap?.(data)
               connection.buffer = Buffer.concat([connection.buffer, data])
               connection.lastDataTime = Date.now()
             } catch (err: any) {
@@ -326,6 +331,12 @@ export default class ComClient extends BaseClient {
         message: error instanceof Error ? error.message : '发送命令失败'
       }
     }
+  }
+
+  /** 串口镜像:挂载/卸载原始字节 tap(cb 为 null 即卸载) */
+  setRawTap(connId: string, cb: ((chunk: Buffer) => void) | null): void {
+    const connection = this.serialConnections.get(connId)
+    if (connection) connection.rawTap = cb
   }
 
   async disconnect(connId: string): Promise<object> {
@@ -501,6 +512,7 @@ export default class ComClient extends BaseClient {
             onData: savedOnData,
             onClose: savedOnClose,
             onLog: connection.onLog,
+            rawTap: connection.rawTap,
             receiveHex: connection.receiveHex,
             receiveBatchMs: config.receiveBatchMs !== undefined ? normalizeReceiveBatchMs(config.receiveBatchMs) : connection.receiveBatchMs,
             splitter: new BufferLineSplitter(newEncoding, connection.receiveHex)
@@ -510,6 +522,8 @@ export default class ComClient extends BaseClient {
           // 收集数据到缓冲区（Buffer 累积，避免多字节字符被分割）
           newPort.on('data', (data: Buffer) => {
             try {
+              // 重连后镜像 tap 延续
+              newConnection.rawTap?.(data)
               newConnection.buffer = Buffer.concat([newConnection.buffer, data])
               newConnection.lastDataTime = Date.now()
             } catch (err: any) {
@@ -593,6 +607,7 @@ export default class ComClient extends BaseClient {
           onData: oldConnection.onData,
           onClose: oldConnection.onClose,
           onLog: oldConnection.onLog,
+          rawTap: oldConnection.rawTap,
           receiveHex: oldConnection.receiveHex,
           receiveBatchMs: oldConnection.receiveBatchMs,
           splitter: new BufferLineSplitter(encoding, oldConnection.receiveHex)
@@ -602,6 +617,7 @@ export default class ComClient extends BaseClient {
         // 收集数据到缓冲区（Buffer 累积，避免多字节字符被分割）
         recoveryPort.on('data', (data: Buffer) => {
           try {
+            newConnection.rawTap?.(data)
             newConnection.buffer = Buffer.concat([newConnection.buffer, data])
             newConnection.lastDataTime = Date.now()
           } catch (err: any) {

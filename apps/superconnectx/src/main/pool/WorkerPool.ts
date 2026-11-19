@@ -19,7 +19,7 @@ import logger from '../ipc/IpcAppLogger'
 // ===================== 消息类型定义 =====================
 
 export interface WorkerToMainMessage {
-  type: 'ready' | 'data' | 'log' | 'close' | 'start-result' | 'send-result' | 'stop-result' | 'update-config-result' | 'error'
+  type: 'ready' | 'data' | 'log' | 'close' | 'start-result' | 'send-result' | 'stop-result' | 'update-config-result' | 'error' | 'mirror-raw'
   sessionId: string
   requestId?: string
   success?: boolean
@@ -30,16 +30,20 @@ export interface WorkerToMainMessage {
   isHex?: boolean
   logStr?: string
   error?: string
+  /** mirror-raw:会话原始字节(镜像 tap,Buffer 结构化克隆传输) */
+  bytes?: Buffer
 }
 
 export interface MainToWorkerMessage {
-  type: 'start' | 'send' | 'stop' | 'update-config' | 'shutdown'
+  type: 'start' | 'send' | 'stop' | 'update-config' | 'shutdown' | 'mirror-set'
   sessionId: string
   connInfo?: any
   connectionType?: string
   command?: string
   config?: any
   requestId?: string
+  /** mirror-set:开关 ComClient 原始字节 tap */
+  enabled?: boolean
 }
 
 interface WorkerEntry {
@@ -69,6 +73,7 @@ export default class WorkerPool {
 
   // 全局回调（所有 Worker 的数据/日志/关闭事件都通过这里通知外部）
   private onDataCallback: ((sessionId: string, displayData: string, timestamp: string, isHex: boolean) => void) | null = null
+  private onRawDataCallback: ((sessionId: string, chunk: Buffer) => void) | null = null
   private onLogCallback: ((sessionId: string, logStr: string, timestamp: string) => void) | null = null
   private onCloseCallback: ((sessionId: string) => void) | null = null
 
@@ -94,6 +99,17 @@ export default class WorkerPool {
     this.onDataCallback = onData
     this.onLogCallback = onLog
     this.onCloseCallback = onClose
+  }
+
+  /** 镜像原始字节回调(mirror-raw 消息) */
+  setOnRawData(cb: (sessionId: string, chunk: Buffer) => void): void {
+    this.onRawDataCallback = cb
+  }
+
+  /** 开关指定会话的原始字节 tap(worker 内 ComClient) */
+  setMirrorTap(sessionId: string, enabled: boolean): void {
+    const normalized = String(sessionId)
+    this.sendToWorker(normalized, { type: 'mirror-set', sessionId: normalized, enabled })
   }
 
   /**
@@ -171,6 +187,12 @@ export default class WorkerPool {
             msg.timestamp || '',
             msg.isHex || false
           )
+        }
+        break
+
+      case 'mirror-raw':
+        if (isCurrentEntry && msg.sessionId === entry.sessionId && msg.bytes) {
+          this.onRawDataCallback?.(msg.sessionId, Buffer.from(msg.bytes))
         }
         break
 

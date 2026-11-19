@@ -65,6 +65,8 @@ vi.mock('@/main/pool/WorkerPool', () => ({
     getInstance() {
       return {
         setCallbacks: vi.fn(),
+        setOnRawData: vi.fn(),
+        setMirrorTap: vi.fn(),
         startConnection: vi.fn(async () => ({ success: true, connId: 'worker-test' })),
         sendData: vi.fn(async () => ({ success: true })),
         stopConnection: vi.fn(async () => ({ success: true })),
