@@ -877,5 +877,25 @@
     "copy": "Copy",
     "copied": "Copied to clipboard",
     "copyFailed": "Copy failed"
+  },
+  "mirror": {
+    "entry": "Mirror",
+    "title": "Serial Mirror",
+    "enable": "Enable mirror",
+    "pickPair": "Pick virtual pair",
+    "needConnected": "Connect the port first",
+    "needPair": "Pick a virtual pair first",
+    "dirRx": "Device → Mirror (visible to peer)",
+    "dirInject": "Mirror → Device (inject)",
+    "dirOwnTx": "Own TX → Mirror",
+    "whitelist": "Whitelist",
+    "blacklist": "Blacklist",
+    "addRule": "Rule",
+    "bytes": "Bytes",
+    "test": "Test",
+    "testHint": "Type HEX (e.g. 7E01) or text to light up hits",
+    "hitState": "● hit ○ miss (gray)",
+    "startFail": "Mirror failed to start",
+    "stats": "Fwd {rxFwd}B / Drop {rxDrop}B · Inject {injectFwd}B / Drop {injectDrop}B · Own-TX {ownTxFwd}B"
   }
 }

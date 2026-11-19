@@ -877,5 +877,25 @@
     "copy": "复制",
     "copied": "已复制到剪贴板",
     "copyFailed": "复制失败"
+  },
+  "mirror": {
+    "entry": "镜像",
+    "title": "串口镜像",
+    "enable": "启用镜像",
+    "pickPair": "选择虚拟串口对",
+    "needConnected": "需先连接串口",
+    "needPair": "请先选择虚拟串口对",
+    "dirRx": "设备 → 镜像口(对方可见)",
+    "dirInject": "镜像口 → 设备(注入)",
+    "dirOwnTx": "自己发送 → 镜像口",
+    "whitelist": "白名单",
+    "blacklist": "黑名单",
+    "addRule": "规则",
+    "bytes": "字节",
+    "test": "测试",
+    "testHint": "输入 HEX(如 7E01)或文本,点亮各行命中",
+    "hitState": "● 命中 ○ 未命中(灰)",
+    "startFail": "镜像启动失败",
+    "stats": "转发 {rxFwd}B / 拦截 {rxDrop}B · 注入 {injectFwd}B / 拦截 {injectDrop}B · 自发镜像 {ownTxFwd}B"
   }
 }

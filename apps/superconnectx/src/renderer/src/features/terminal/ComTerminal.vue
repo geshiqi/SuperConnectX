@@ -102,8 +102,14 @@
             <el-button icon="More" size="small" class="btn-primary more-btn" @click="showMoreDialog = true">
               {{ t('comTerminal.more') }}
             </el-button>
+            <el-button icon="Connection" size="small" class="btn-primary" :title="t('mirror.title')" @click="mirrorDialogVisible = true">
+              {{ t('mirror.entry') }}
+            </el-button>
           </div>
         </div>
+
+        <!-- 串口镜像对话框 -->
+        <MirrorDialog v-model="mirrorDialogVisible" :com-name="props.connection.comName || ''" :session-id="String(props.connection.sessionId || '')" :connected="isConnected" />
 
         <!-- 更多设置对话框 -->
         <el-dialog v-model="showMoreDialog" :title="t('comTerminal.advancedSettings')" width="400px">
@@ -179,6 +185,7 @@ import { ref, onUnmounted, onMounted, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import UnifiedTerminal from './UnifiedTerminal.vue'
+import MirrorDialog from './MirrorDialog.vue'
 import { useTerminal } from './useTerminal'
 import { getDefaultTerminalFont } from '../../utils/FontDetector'
 import { buildSentEcho, buildWireHexEcho, formatReceivedData, sendDisplayText, recvDisplayText } from './useTerminalDisplayText'
@@ -215,6 +222,7 @@ const unifiedTerminalRef = ref<InstanceType<typeof UnifiedTerminal>>()
 const isConnected = ref(false)
 const isConnecting = ref(false)
 const preventAutoReconnect = ref(false)
+const mirrorDialogVisible = ref(false)
 const showMoreDialog = ref(false)
 const showAddBaudRateDialog = ref(false)
 const newBaudRate = ref(9600)
