@@ -896,6 +896,10 @@
     "testHint": "Type HEX (e.g. 7E01) or text to light up hits",
     "hitState": "● hit ○ miss (gray)",
     "startFail": "Mirror failed to start",
-    "stats": "Fwd {rxFwd}B / Drop {rxDrop}B · Inject {injectFwd}B / Drop {injectDrop}B · Own-TX {ownTxFwd}B"
+    "stats": "Fwd {rxFwd}B / Drop {rxDrop}B · Inject {injectFwd}B / Drop {injectDrop}B · Own-TX {ownTxFwd}B",
+    "portExposed": "Exposed",
+    "portInternal": "Internal",
+    "regexHint": "Rules are regex: HEX target matches uppercase hex text (e.g. ^7E.*D3); Bytes target uses \\xNN (e.g. ^\\x7e). Both ports must be the same com0com pair",
+    "busyHint": "Internal port busy: close its terminal tab (tabs auto-restore on app restart)"
   }
 }

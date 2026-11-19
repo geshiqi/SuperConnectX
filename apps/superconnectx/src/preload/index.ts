@@ -233,6 +233,7 @@ contextBridge.exposeInMainWorld('mirrorApi', {
     ipcRenderer.invoke('mirror:start', payload),
   stop: (sessionId: string): Promise<{ success: boolean }> => ipcRenderer.invoke('mirror:stop', sessionId),
   status: (): Promise<unknown[]> => ipcRenderer.invoke('mirror:status'),
+  listCom0comPorts: (): Promise<string[]> => ipcRenderer.invoke('mirror:list-com0com-ports'),
   updateConfig: (sessionId: string, config: unknown): Promise<{ success: boolean; message?: string }> =>
     ipcRenderer.invoke('mirror:update-config', sessionId, config),
   onMirrorEvent: (callback: (event: { kind: string; sessionId: string; message?: string }) => void): (() => void) => {

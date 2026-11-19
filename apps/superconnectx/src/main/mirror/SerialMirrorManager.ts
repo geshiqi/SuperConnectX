@@ -76,6 +76,20 @@ export default class SerialMirrorManager {
     ipcMain.handle('mirror:start', (_e, payload: MirrorStartPayload) => this.start(payload))
     ipcMain.handle('mirror:stop', (_e, sessionId: string) => this.stop(sessionId))
     ipcMain.handle('mirror:status', () => this.status())
+    // 免提权列举 com0com 口:注册表 SERIALCOMM 中设备名含 com0com(setupc list 需 UAC,不适合弹窗内调用)
+    ipcMain.handle('mirror:list-com0com-ports', () => {
+      try {
+        const out = require('node:child_process').execSync('reg query HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM', { encoding: 'utf8', timeout: 3000 })
+        const ports: string[] = []
+        for (const line of out.split(/\r?\n/)) {
+          const mch = line.match(/com0com\S*\s+REG_SZ\s+(COM\d+)/i)
+          if (mch) ports.push(mch[1])
+        }
+        return ports.sort((a, b) => parseInt(a.slice(3)) - parseInt(b.slice(3)))
+      } catch {
+        return []
+      }
+    })
     ipcMain.handle('mirror:update-config', (_e, sessionId: string, config: MirrorConfig) =>
       this.updateConfig(sessionId, config)
     )
@@ -98,16 +112,29 @@ export default class SerialMirrorManager {
       return { success: false, message: 'missing sessionId/internalPort' }
     }
     if (this.sessions.has(payload.sessionId)) await this.stop(payload.sessionId)
+    // com0com 无波特率仿真,波特率参数不影响;115200 占位
+    // 显式 open 并 await:autoOpen:true 的打开失败只走 error 事件不抛异常,
+    // 曾致内口被占用时 start 假报成功(幽灵会话,后续写入全部静默失败)
+    const port = new SerialPort({ path: payload.internalPort, baudRate: 115200, autoOpen: false })
+    const openError = await new Promise<Error | null>((resolve) => {
+      port.open((err) => resolve(err ?? null))
+      port.once('error', (err: Error) => resolve(err))
+    })
+    if (openError || !port.isOpen) {
+      try { port.close() } catch { /* ignore */ }
+      const message = `内口 ${payload.internalPort} 打开失败: ${openError?.message ?? 'unknown'}(可能被终端标签页或其他应用占用)`
+      logger.error(`[mirror] start failed: ${message}`)
+      this.emitEvent('error', payload.sessionId, message)
+      return { success: false, message }
+    }
     try {
-      // com0com 无波特率仿真,波特率参数不影响;115200 占位
-      const port = new SerialPort({ path: payload.internalPort, baudRate: 115200, autoOpen: true })
       const session: MirrorSession = { payload, port, stats: { rxFwd: 0, rxDrop: 0, injectFwd: 0, injectDrop: 0, ownTxFwd: 0 } }
       port.on('data', (buf: Buffer) => this.onPairData(payload.sessionId, buf))
       port.on('close', () => {
         // 内端被关/出错:清理并通知(外端应用关闭串口通常不触发,com0com 对常驻)
         if (this.sessions.get(payload.sessionId)?.port === port) {
           this.sessions.delete(payload.sessionId)
-          this.hooks?.enableTap(payload.sessionId, false)
+          try { this.hooks?.enableTap(payload.sessionId, false) } catch { /* 断开竞态时 worker 可能已终止 */ }
           this.emitEvent('stopped', payload.sessionId, 'pair port closed')
         }
       })
@@ -115,7 +142,7 @@ export default class SerialMirrorManager {
         logger.error(`[mirror] pair port error: ${err.message}`)
       })
       this.sessions.set(payload.sessionId, session)
-      this.hooks?.enableTap(payload.sessionId, true)
+      try { this.hooks?.enableTap(payload.sessionId, true) } catch { /* 断开竞态时 worker 可能已终止 */ }
       logger.info(`[mirror] started: ${payload.comName} -> ${payload.exposedPort} (internal ${payload.internalPort})`)
       this.emitEvent('started', payload.sessionId)
       return { success: true }
@@ -128,7 +155,7 @@ export default class SerialMirrorManager {
 
   async stop(sessionId: string): Promise<{ success: boolean }> {
     const session = this.sessions.get(sessionId)
-    this.hooks?.enableTap(sessionId, false)
+    try { this.hooks?.enableTap(sessionId, false) } catch { /* 断开竞态时 worker 可能已终止 */ }
     if (!session) return { success: true }
     this.sessions.delete(sessionId)
     try {

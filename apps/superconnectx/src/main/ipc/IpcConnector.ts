@@ -81,7 +81,7 @@ export default class IpcConnector {
       (sessionId: string) => {
         this.stateManager.cleanupOnClose(sessionId)
         // 串口镜像:会话断开联动清理
-        SerialMirrorManager.getInstance().onSessionClosed(sessionId)
+        try { SerialMirrorManager.getInstance().onSessionClosed(sessionId) } catch { /* ignore */ }
         // 同步清理 ftpClients（若存在）
         // FTP cleanup 由 ftpConnector 内部管理，此处通过 stateManager 统一通知即可
       }

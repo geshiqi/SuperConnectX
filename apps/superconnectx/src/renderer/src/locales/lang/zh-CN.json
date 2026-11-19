@@ -896,6 +896,10 @@
     "testHint": "输入 HEX(如 7E01)或文本,点亮各行命中",
     "hitState": "● 命中 ○ 未命中(灰)",
     "startFail": "镜像启动失败",
-    "stats": "转发 {rxFwd}B / 拦截 {rxDrop}B · 注入 {injectFwd}B / 拦截 {injectDrop}B · 自发镜像 {ownTxFwd}B"
+    "stats": "转发 {rxFwd}B / 拦截 {rxDrop}B · 注入 {injectFwd}B / 拦截 {injectDrop}B · 自发镜像 {ownTxFwd}B",
+    "portExposed": "对外口",
+    "portInternal": "镜像内口",
+    "regexHint": "规则为正则:HEX 目标对大写十六进制文本匹配(如 ^7E.*D3);字节目标用 \\xNN 表达字节值(如 ^\\x7e)。两个口须为同一虚拟串口对",
+    "busyHint": "内口被占用:请关闭该端口的终端标签页(应用重启会自动恢复上次标签,注意残留)"
   }
 }

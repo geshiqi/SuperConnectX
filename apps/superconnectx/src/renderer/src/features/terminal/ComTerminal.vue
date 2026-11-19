@@ -102,7 +102,7 @@
             <el-button icon="More" size="small" class="btn-primary more-btn" @click="showMoreDialog = true">
               {{ t('comTerminal.more') }}
             </el-button>
-            <el-button icon="Connection" size="small" class="btn-primary" :title="t('mirror.title')" @click="mirrorDialogVisible = true">
+            <el-button icon="Connection" size="small" class="btn-primary" :title="t('mirror.title')" @click="reopenMirrorDialog">
               {{ t('mirror.entry') }}
             </el-button>
           </div>
@@ -223,6 +223,12 @@ const isConnected = ref(false)
 const isConnecting = ref(false)
 const preventAutoReconnect = ref(false)
 const mirrorDialogVisible = ref(false)
+// 强制重开:即使上次弹窗状态异常也保证重新弹出
+const reopenMirrorDialog = async (): Promise<void> => {
+  mirrorDialogVisible.value = false
+  await nextTick()
+  mirrorDialogVisible.value = true
+}
 const showMoreDialog = ref(false)
 const showAddBaudRateDialog = ref(false)
 const newBaudRate = ref(9600)

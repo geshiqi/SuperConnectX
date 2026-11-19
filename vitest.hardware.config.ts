@@ -15,8 +15,9 @@ const commonAlias = {
 
 export default defineConfig({
   test: {
-    include: ['tests/integration/mirrorSmoke.test.ts'],
+    include: ['tests/integration/mirror*.test.ts'],
     environment: 'node',
+    fileParallelism: false // 硬件用例共享物理串口,必须串行,
     testTimeout: 30000
   },
   resolve: {

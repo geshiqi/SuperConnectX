@@ -108,8 +108,9 @@ export default class WorkerPool {
 
   /** 开关指定会话的原始字节 tap(worker 内 ComClient) */
   setMirrorTap(sessionId: string, enabled: boolean): void {
+    // fire-and-forget:worker 已终止(断开竞态)时静默跳过,不抛错打断关闭链路
     const normalized = String(sessionId)
-    this.sendToWorker(normalized, { type: 'mirror-set', sessionId: normalized, enabled })
+    this.sendToWorker(normalized, { type: 'mirror-set', sessionId: normalized, enabled }).catch(() => {})
   }
 
   /**

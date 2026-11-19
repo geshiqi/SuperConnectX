@@ -1,14 +1,20 @@
 <template>
-  <el-dialog v-model="visible" :title="t('mirror.title') + ' - ' + comName" width="640px" :close-on-click-modal="false">
+  <el-dialog v-model="visible" append-to-body destroy-on-close :title="t('mirror.title') + ' - ' + comName" width="640px" :close-on-click-modal="false">
     <!-- 开关与虚拟对选择 -->
     <div class="mirror-row">
-      <el-switch v-model="active" :disabled="!connected || !exposedPort" @change="toggle" active-text="" />
+      <el-switch v-model="active" :disabled="!connected || !exposedPort || !internalPort" @change="toggle" active-text="" />
       <span class="mirror-label">{{ t('mirror.enable') }}</span>
-      <el-select v-model="exposedPort" size="small" style="width: 160px" :placeholder="t('mirror.pickPair')" @change="onPickPair">
-        <el-option v-for="opt in pairOptions" :key="opt.exposed" :label="`${opt.exposed} ⇄ ${opt.internal}`" :value="opt.exposed" />
+      <el-select v-model="exposedPort" size="small" style="width: 110px" :placeholder="t('mirror.portExposed')" @change="save">
+        <el-option v-for="c in comPorts" :key="'e'+c" :label="c" :value="c" />
+      </el-select>
+      <span class="mirror-label">/</span>
+      <el-select v-model="internalPort" size="small" style="width: 110px" :placeholder="t('mirror.portInternal')" @change="save">
+        <el-option v-for="c in comPorts" :key="'i'+c" :label="c" :value="c" />
       </el-select>
       <span v-if="!connected" class="mirror-warn">{{ t('mirror.needConnected') }}</span>
     </div>
+
+    <div class='regex-hint'>{{ t('mirror.regexHint') }}</div>
 
     <!-- 三个方向的规则编辑 -->
     <div v-for="dir in dirs" :key="dir.key" class="mirror-dir">
@@ -23,8 +29,8 @@
       </div>
       <div v-for="(r, i) in cfg[dir.key].rules" :key="r.id" class="mirror-row rule-row">
         <el-select v-model="r.target" size="small" style="width: 82px">
-          <el-option label="HEX" value="hex" />
-          <el-option :label="t('mirror.bytes')" value="bytes" />
+          <el-option label="正则·HEX" value="hex" />
+          <el-option label="正则·字节" value="bytes" />
         </el-select>
         <el-input v-model="r.pattern" size="small" :placeholder="r.target === 'hex' ? '^7E.*D3' : String.raw`^\x7e`" style="flex: 1" @change="save" />
         <span class="rule-hit" :class="{ ok: hitMap[r.id] === 'hit', bad: hitMap[r.id] === 'miss' }" :title="t('mirror.hitState')">
@@ -70,7 +76,7 @@ const defaultCfg = (): MirrorConfig => ({
 const cfg = ref<MirrorConfig>(defaultCfg())
 const exposedPort = ref('')
 const internalPort = ref('')
-const pairOptions = ref<Array<{ exposed: string; internal: string }>>([])
+const comPorts = ref<string[]>([])
 const active = ref(false)
 const testInput = ref('')
 const hitMap = ref<Record<string, 'hit' | 'miss'>>({})
@@ -99,12 +105,6 @@ const addRule = (key: 'rx' | 'inject' | 'ownTx'): void => {
   save()
 }
 
-const onPickPair = (): void => {
-  const opt = pairOptions.value.find((o) => o.exposed === exposedPort.value)
-  internalPort.value = opt?.internal ?? ''
-  if (active.value) void toggle(true) // 切换对:重启镜像
-  save()
-}
 
 const refreshStatus = async (): Promise<void> => {
   const list = (await window.mirrorApi.status()) as Array<{ sessionId: string; exposedPort: string; internalPort: string; stats: Record<string, number> }>
@@ -131,11 +131,12 @@ const toggle = async (on: boolean): Promise<void> => {
       comName: props.comName,
       internalPort: internalPort.value,
       exposedPort: exposedPort.value,
-      config: cfg.value
+      config: JSON.parse(JSON.stringify(cfg.value))
     })
     if (!r.success) {
       active.value = false
-      ElMessage.error(r.message || t('mirror.startFail'))
+      const busy = /busy|拒绝|占用|cannot access/i.test(r.message || '')
+      ElMessage.error((r.message || t('mirror.startFail')) + (busy ? ' | ' + t('mirror.busyHint') : ''))
       return
     }
   } else {
@@ -146,7 +147,8 @@ const toggle = async (on: boolean): Promise<void> => {
 }
 
 // 规则变化热更新到运行中的镜像
-watch(cfg, () => { if (active.value) void window.mirrorApi.updateConfig(props.sessionId, cfg.value) }, { deep: true })
+const plainCfg = (): MirrorConfig => JSON.parse(JSON.stringify(cfg.value))
+watch(cfg, () => { if (active.value) void window.mirrorApi.updateConfig(props.sessionId, plainCfg()) }, { deep: true })
 
 const runTest = (): void => {
   const raw = testInput.value.trim()
@@ -167,12 +169,7 @@ let removeEventListener: (() => void) | null = null
 watch(visible, async (open) => {
   if (open) {
     load()
-    // 虚拟对:相邻两条为一对
-    const ports = (await window.virtualPortApi.listPorts()) as Array<{ ID: string; Name: string }>
-    pairOptions.value = []
-    for (let i = 0; i + 1 < ports.length; i += 2) {
-      pairOptions.value.push({ exposed: ports[i].Name, internal: ports[i + 1].Name })
-    }
+    comPorts.value = await window.mirrorApi.listCom0comPorts()
     await refreshStatus()
     removeEventListener = window.mirrorApi.onMirrorEvent(() => void refreshStatus())
   } else {
@@ -190,6 +187,7 @@ watch(visible, async (open) => {
 .mirror-warn { color: #e6a23c; font-size: 12px; }
 .mirror-dir { border-top: 1px solid var(--border-secondary, #404040); padding-top: 6px; margin-top: 6px; }
 .rule-row { padding-left: 16px; }
+.regex-hint { font-size: 12px; color: var(--text-secondary, #888); margin: 4px 0; }
 .rule-hit { width: 14px; text-align: center; font-size: 12px; }
 .rule-hit.ok { color: #67c23a; }
 .rule-hit.bad { color: #909399; }

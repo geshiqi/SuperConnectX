@@ -145,6 +145,7 @@ declare global {
       }) => Promise<{ success: boolean; message?: string }>
       stop: (sessionId: string) => Promise<{ success: boolean }>
       status: () => Promise<Array<{ sessionId: string; comName: string; internalPort: string; exposedPort: string; stats: { rxFwd: number; rxDrop: number; injectFwd: number; injectDrop: number; ownTxFwd: number } }>>
+      listCom0comPorts: () => Promise<string[]>
       updateConfig: (sessionId: string, config: import('../../main/mirror/rules').MirrorConfig) => Promise<{ success: boolean; message?: string }>
       onMirrorEvent: (callback: (event: { kind: string; sessionId: string; message?: string }) => void) => () => void
     }

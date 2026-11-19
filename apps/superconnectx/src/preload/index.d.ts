@@ -202,6 +202,7 @@ declare global {
       }) => Promise<{ success: boolean; message?: string }>
       stop: (sessionId: string) => Promise<{ success: boolean }>
       status: () => Promise<unknown[]>
+      listCom0comPorts: () => Promise<string[]>
       updateConfig: (
         sessionId: string,
         config: import('../main/mirror/rules').MirrorConfig
