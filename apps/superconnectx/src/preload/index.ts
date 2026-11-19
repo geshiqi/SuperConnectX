@@ -244,6 +244,10 @@ contextBridge.exposeInMainWorld('paletteApi', {
     minWidth?: number
   ): Promise<{ success: boolean; width?: number; height?: number }> =>
     ipcRenderer.invoke('palette:resize-minimal', widthDelta, height, minWidth),
+  setUltra: (ultra: boolean, posX?: number, posY?: number): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('palette:set-ultra', ultra, posX, posY),
+  moveMinimal: (x: number, y: number): Promise<{ success: boolean; x?: number; y?: number }> =>
+    ipcRenderer.invoke('palette:move-minimal', x, y),
   notifyTheme: (theme: string): void => {
     ipcRenderer.send('palette:set-theme', theme)
   },

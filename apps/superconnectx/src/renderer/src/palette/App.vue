@@ -19,8 +19,14 @@
       </div>
     </div>
 
+    <!-- 极致精简(折叠):单按钮悬浮窗,点击展开为极简条,按住拖动 -->
+    <div v-if="ultraMode" class="ultra-button" :title="t('palette.ultraHint')" @pointerdown="onUltraPointerDown">
+      <el-icon :size="20"><CaretRight /></el-icon>
+    </div>
+
     <!-- 极简模式:组下拉 + 当前组任务运行按钮 + 状态;支持横条/竖列两种布局 -->
-    <div v-if="minimalMode" class="minimal-bar" :class="{ vertical: minimalLayout === 'vertical' }">
+    <template v-else-if="minimalMode">
+    <div class="minimal-bar" :class="{ vertical: minimalLayout === 'vertical' }">
       <el-select v-model="activeGroup" size="small" class="minimal-group">
         <el-option v-for="group in taskGroups" :key="group.name" :label="`${group.name || t('palette.groupUngrouped')} (${group.tasks.length})`" :value="group.name" />
       </el-select>
@@ -43,6 +49,9 @@
       <span v-if="isRunning" class="minimal-status run"><el-icon class="spin"><Loading /></el-icon></span>
       <span v-else-if="lastRunStatus" class="minimal-status" :class="lastRunStatus.success ? 'ok' : 'fail'">{{ lastRunStatus.success ? '✓' : '✗' }}</span>
       <span class="minimal-controls">
+        <button class="win-btn" :title="t('palette.collapseToUltra')" @click="enterUltra">
+          <el-icon :size="12"><Remove /></el-icon>
+        </button>
         <button class="win-btn" :title="t('palette.minimalLayoutToggle')" @click="toggleMinimalLayout">
           <el-icon :size="12"><Sort /></el-icon>
         </button>
@@ -69,9 +78,10 @@
     </div>
 
     <!-- 极简输出区:限高滚动,只保留最近输出 -->
-    <div v-if="minimalMode" class="minimal-output" ref="outputBodyRef">
+    <div class="minimal-output" ref="outputBodyRef">
       <div v-for="(line, i) in minimalOutputLines" :key="i" class="output-line" :class="[line.kind, classifyDiagnosticLine(line.text)]">{{ line.text }}</div>
     </div>
+    </template>
 
     <!-- 完整模式 -->
     <template v-else>
@@ -777,6 +787,13 @@ const toggleMinimal = async (): Promise<void> => {
     keyword.value = ''
     await applyMinimalGeometry()
   } else {
+    // 退回完整模式:连带清除折叠态标记(下次打开为完整窗口)
+    ultraMode.value = false
+    try {
+      localStorage.removeItem(ULTRA_KEY)
+    } catch {
+      /* ignore */
+    }
     await window.paletteApi?.setMinimal?.(false)
   }
 }
@@ -789,6 +806,83 @@ const toggleMinimalLayout = async (): Promise<void> => {
     /* ignore */
   }
   if (minimalMode.value) await applyMinimalGeometry()
+}
+
+// ===== 极致精简(折叠态):面板缩为单按钮悬浮窗 =====
+const ULTRA_KEY = 'palette-ultra'
+const ULTRA_POS_KEY = 'palette-ultra-pos'
+const ultraMode = ref(false)
+
+const readSavedUltraPos = (): { x: number; y: number } | null => {
+  try {
+    const raw = localStorage.getItem(ULTRA_POS_KEY)
+    if (!raw) return null
+    const pos = JSON.parse(raw)
+    return Number.isFinite(pos?.x) && Number.isFinite(pos?.y) ? { x: pos.x, y: pos.y } : null
+  } catch {
+    return null
+  }
+}
+
+// 折叠:窗口缩为 44x44,位置优先用上次按钮位置;极简态标志保持,完整模式还原基准沿用进入极简时记录的
+const enterUltra = async (): Promise<void> => {
+  ultraMode.value = true
+  try {
+    localStorage.setItem(ULTRA_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+  const pos = readSavedUltraPos()
+  await window.paletteApi?.setUltra?.(true, pos?.x, pos?.y)
+}
+
+// 展开:回极简条,从按钮所在位置展开(套用极简几何:记忆宽度/布局)
+const exitUltra = async (): Promise<void> => {
+  ultraMode.value = false
+  try {
+    localStorage.removeItem(ULTRA_KEY)
+  } catch {
+    /* ignore */
+  }
+  await applyMinimalGeometry()
+}
+
+// 折叠按钮按下:整面可拖 + 点击展开,位移阈值区分;指针捕获保证拖出小窗后事件仍到达。
+// 移动发绝对目标坐标(起始窗口位置 + 光标总位移):夹取/延迟丢失的位移不会累积,
+// 即使中途顶到屏幕边缘,回移后按钮立刻回到光标相对位置
+const onUltraPointerDown = (e: PointerEvent): void => {
+  if (e.button !== 0) return
+  const el = e.currentTarget as HTMLElement
+  el.setPointerCapture(e.pointerId)
+  const startWX = window.screenX
+  const startWY = window.screenY
+  const startCX = e.screenX
+  const startCY = e.screenY
+  let lastCX = e.screenX
+  let lastCY = e.screenY
+  let moved = 0
+  const onMove = (ev: PointerEvent): void => {
+    moved += Math.abs(ev.screenX - lastCX) + Math.abs(ev.screenY - lastCY)
+    lastCX = ev.screenX
+    lastCY = ev.screenY
+    window.paletteApi?.moveMinimal?.(startWX + (ev.screenX - startCX), startWY + (ev.screenY - startCY))
+  }
+  const onUp = (): void => {
+    el.removeEventListener('pointermove', onMove)
+    el.removeEventListener('pointerup', onUp)
+    if (moved < 5) {
+      void exitUltra()
+    } else {
+      // 拖动结束:记忆按钮位置
+      try {
+        localStorage.setItem(ULTRA_POS_KEY, JSON.stringify({ x: window.screenX, y: window.screenY }))
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  el.addEventListener('pointermove', onMove)
+  el.addEventListener('pointerup', onUp)
 }
 
 // ===== 极简调节把手:增量发给主进程按自身 bounds 累加(避免 DPI 换算漂移)。
@@ -928,6 +1022,18 @@ onMounted(async () => {
     if (theme === 'light' || theme === 'dark') themeCtl.applyTheme(theme)
   }) ?? null
   await loadTasks()
+  // 上次以折叠态收起:面板打开后直接呈现为按钮(位置用上次按钮位置)
+  try {
+    if (localStorage.getItem(ULTRA_KEY)) {
+      minimalMode.value = true
+      ultraMode.value = true
+      await nextTick()
+      const pos = readSavedUltraPos()
+      await window.paletteApi?.setUltra?.(true, pos?.x, pos?.y)
+    }
+  } catch {
+    /* ignore */
+  }
   // 恢复上次运行状态显示(应用重启后面板是独立会话,不恢复历史输出)
   isRunning.value = await window.taskApi.isRunning()
   await refreshBackground()
@@ -953,6 +1059,27 @@ onUnmounted(() => {
   color: var(--text-white, #ccc);
   font-size: 13px;
   overflow: hidden;
+}
+
+/* ===== 极致精简(折叠):窗口即一颗按钮,点击展开/按住拖动 ===== */
+.ultra-button {
+  margin: auto; /* flex 容器内居中,窗口 44x44 时按钮即全窗 */
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--bg-titlebar, #2d2d30);
+  border: 1px solid var(--border-secondary, #404040);
+  color: var(--focus-border-color, #409eff);
+  cursor: pointer;
+  user-select: none;
+  touch-action: none; /* pointer 拖拽防触摸手势抢占 */
+}
+
+.ultra-button:hover {
+  background: var(--overlay-hover, #37383d);
 }
 
 .palette-titlebar {

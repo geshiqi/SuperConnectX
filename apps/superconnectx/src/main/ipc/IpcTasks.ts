@@ -16,6 +16,8 @@ import type { UserTask, TaskRunEvent } from '../../shared/tasks/UserTask'
 const DEFAULT_PALETTE_BOUNDS = { width: 720, height: 560 }
 const PALETTE_MIN_SIZE = { width: 420, height: 320 }
 const MINIMAL_MIN_WIDTH = 360
+/** 折叠态(单按钮悬浮窗)窗口尺寸:按钮 44px + 四周 6px 同色缓冲带 */
+const ULTRA_WINDOW_SIZE = 56
 
 export default class IpcTasks {
   private static sInstance: IpcTasks
@@ -27,6 +29,7 @@ export default class IpcTasks {
   private currentRunId: string | null = null
   private currentTheme: 'dark' | 'light' = 'dark'
   private paletteMinimal = false
+  private paletteUltra = false
   private palettePreMinimalBounds: Electron.Rectangle | null = null
   private palettePreMinimalMaximized = false
 
@@ -141,6 +144,12 @@ export default class IpcTasks {
       if (!win || win.isDestroyed()) return { success: false }
       const wasMinimal = this.paletteMinimal
       this.paletteMinimal = minimal === true
+      // 折叠->极简 的展开链路不经过 set-ultra(false),在此复位折叠标志
+      // (否则极简条移动会被按折叠态尺寸硬锁)并恢复系统可调整
+      if (this.paletteUltra && this.paletteMinimal) {
+        this.paletteUltra = false
+        win.setResizable(true)
+      }
       if (this.paletteMinimal) {
         // 仅从完整模式首次进入时记录还原基准:极简期内(如横竖布局切换)重复调用
         // 会把小条尺寸误存为还原目标。先取消最大化:setBounds 对最大化窗口不生效
@@ -165,6 +174,7 @@ export default class IpcTasks {
         win.setAlwaysOnTop(true)
       } else {
         win.setAlwaysOnTop(false)
+        win.setResizable(true) // 折叠态曾关闭,恢复完整模式边缘调整
         if (this.palettePreMinimalBounds) {
           win.setBounds(this.palettePreMinimalBounds)
         }
@@ -199,6 +209,64 @@ export default class IpcTasks {
         win.setBounds({ ...bounds, ...next })
       }
       return { success: true, width: next.width ?? bounds.width, height: next.height ?? bounds.height }
+    })
+
+    // 极致精简(折叠):窗口缩为单按钮悬浮窗。窗口 56px > 按钮 44px:按钮四周留 6px
+    // 同色缓冲带,按压永远落在客户区内,杜绝命中无边框窗口的隐形缩放边框(会把拖动
+    // 变成拉大窗口);位置优先取渲染层记忆值。展开几何由渲染层随后经 set-minimal 应用
+    ipcMain.handle('palette:set-ultra', (_, ultra: boolean, posX?: number, posY?: number) => {
+      const win = this.paletteWindow
+      if (!win || win.isDestroyed()) return { success: false }
+      const size = ULTRA_WINDOW_SIZE
+      if (ultra) {
+        // 从完整模式直接进折叠的兜底:记录还原基准(正常链路 完整->极简->折叠,基准已记)
+        const wasMinimal = this.paletteMinimal
+        this.paletteMinimal = true
+        this.paletteUltra = true
+        if (!wasMinimal) {
+          this.palettePreMinimalMaximized = win.isMaximized()
+          if (this.palettePreMinimalMaximized) win.unmaximize()
+          this.palettePreMinimalBounds = win.getNormalBounds()
+        }
+        const b = win.getBounds()
+        const x = Number.isFinite(posX) ? Math.round(Number(posX)) : b.x
+        const y = Number.isFinite(posY) ? Math.round(Number(posY)) : b.y
+        // 关闭系统可调整:移除隐形缩放边框;程序化 setBounds 移动不受影响
+        win.setResizable(false)
+        win.setMinimumSize(size, size)
+        win.setBounds({ x, y, width: size, height: size })
+        win.setAlwaysOnTop(true)
+      } else {
+        // 展开回极简:恢复可调整,放开最小尺寸,几何随后由 set-minimal 设置
+        this.paletteUltra = false
+        win.setResizable(true)
+        win.setMinimumSize(MINIMAL_MIN_WIDTH, 80)
+      }
+      return { success: true }
+    })
+
+    // 收缩族(极简/折叠)窗口移动:绝对目标坐标,按全部显示器工作区并集夹取(支持跨屏)。
+    // 折叠态尺寸硬锁定,即使系统侧仍发生边缘调整也会在下一事件被纠正
+    ipcMain.handle('palette:move-minimal', (_, x?: number, y?: number) => {
+      const win = this.paletteWindow
+      if (!win || win.isDestroyed() || !this.paletteMinimal) return { success: false }
+      const targetX = Number(x)
+      const targetY = Number(y)
+      if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) return { success: false }
+      const b = win.getBounds()
+      const areas = screen.getAllDisplays().map((d) => d.workArea)
+      const x0 = Math.min(...areas.map((a) => a.x))
+      const y0 = Math.min(...areas.map((a) => a.y))
+      const x1 = Math.max(...areas.map((a) => a.x + a.width))
+      const y1 = Math.max(...areas.map((a) => a.y + a.height))
+      const nx = Math.min(Math.max(Math.round(targetX), x0), x1 - b.width)
+      const ny = Math.min(Math.max(Math.round(targetY), y0), y1 - b.height)
+      if (this.paletteUltra) {
+        win.setBounds({ x: nx, y: ny, width: ULTRA_WINDOW_SIZE, height: ULTRA_WINDOW_SIZE })
+      } else {
+        win.setBounds({ ...b, x: nx, y: ny })
+      }
+      return { success: true, x: nx, y: ny }
     })
 
     // 应用退出前停掉运行中的任务与后台常驻进程(否则孤儿进程会继续占用 J-Link 等)

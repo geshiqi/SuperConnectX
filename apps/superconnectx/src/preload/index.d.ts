@@ -204,6 +204,8 @@ declare global {
         height: number | null,
         minWidth?: number
       ) => Promise<{ success: boolean; width?: number; height?: number }>
+      setUltra: (ultra: boolean, posX?: number, posY?: number) => Promise<{ success: boolean }>
+      moveMinimal: (x: number, y: number) => Promise<{ success: boolean; x?: number; y?: number }>
       notifyTheme: (theme: string) => void
       getTheme: () => Promise<string | null>
       onThemeChanged: (callback: (theme: string) => void) => () => void
