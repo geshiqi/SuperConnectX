@@ -69,10 +69,11 @@ const dirs = [
 ]
 
 const defaultCfg = (): MirrorConfig => ({
-  // rx 默认黑名单(全部转发):空白名单=全拦截,新用户极易踩"镜像无输出"的坑
+  // 三向默认全开+黑名单(全转发):镜像口开箱即为全双工透传桥
+  // (设备数据全转发到镜像口 / 镜像口写入全注入设备 / 自己发送也同步镜像)
   rx: { enabled: true, mode: 'blacklist', rules: [] },
-  inject: { enabled: false, mode: 'whitelist', rules: [] },
-  ownTx: { enabled: false, mode: 'blacklist', rules: [] }
+  inject: { enabled: true, mode: 'blacklist', rules: [] },
+  ownTx: { enabled: true, mode: 'blacklist', rules: [] }
 })
 
 const cfg = ref<MirrorConfig>(defaultCfg())

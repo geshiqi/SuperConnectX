@@ -50,11 +50,12 @@ interface WindowsRef {
 }
 
 export function defaultMirrorConfig(): MirrorConfig {
-  const emptyDir = { enabled: false, mode: 'whitelist' as const, rules: [] }
+  // 三向默认全开+黑名单(全转发),开箱即为全双工透传桥
+  const fwdAll = { enabled: true, mode: 'blacklist' as const, rules: [] }
   return {
-    rx: { ...emptyDir, enabled: true, mode: 'blacklist' as const },
-    inject: { ...emptyDir },
-    ownTx: { ...emptyDir }
+    rx: { ...fwdAll },
+    inject: { ...fwdAll },
+    ownTx: { ...fwdAll }
   }
 }
 
