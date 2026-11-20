@@ -117,6 +117,14 @@ export default class DirectConnector {
     }
   }
 
+  /** 串口镜像:直连模式的原始字节 tap 直挂 ComClient(串口连接全走此路径) */
+  setRawTap(sessionId: string, cb: ((chunk: Buffer) => void) | null): void {
+    const client = this.directClients.get(sessionId) as unknown as
+      | { setRawTap?: (id: string, c: ((chunk: Buffer) => void) | null) => void }
+      | undefined
+    client?.setRawTap?.(sessionId, cb)
+  }
+
   async sendData(conn: any, command: string): Promise<object> {
     const client = this.directClients.get(conn.sessionId)
     if (!client) return { success: false, message: 'Direct mode client not initialized' }

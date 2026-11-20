@@ -52,7 +52,7 @@ interface WindowsRef {
 export function defaultMirrorConfig(): MirrorConfig {
   const emptyDir = { enabled: false, mode: 'whitelist' as const, rules: [] }
   return {
-    rx: { ...emptyDir, enabled: true },
+    rx: { ...emptyDir, enabled: true, mode: 'blacklist' as const },
     inject: { ...emptyDir },
     ownTx: { ...emptyDir }
   }

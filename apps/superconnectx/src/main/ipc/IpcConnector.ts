@@ -90,6 +90,12 @@ export default class IpcConnector {
     // 串口镜像:注入会话钩子(原始字节 tap 开关 + 经会话发送路径注入设备)
     SerialMirrorManager.getInstance().attachHooks({
       enableTap: (sessionId: string, enabled: boolean) => {
+        // 串口连接全走 Direct 模式(shouldUseWorker 对 com 恒 false):tap 直挂
+        // DirectConnector 的 ComClient;telnet 等 worker 会话走 mirror-set 消息。两路都发,未命中者静默
+        this.directConnector.setRawTap(
+          sessionId,
+          enabled ? (chunk) => SerialMirrorManager.getInstance().onSessionRaw(sessionId, chunk) : null
+        )
         this.workerConnector.setMirrorTap(sessionId, enabled)
       },
       sendToSession: (sessionId: string, command: string) =>

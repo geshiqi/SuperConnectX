@@ -68,7 +68,8 @@ const dirs = [
 ]
 
 const defaultCfg = (): MirrorConfig => ({
-  rx: { enabled: true, mode: 'whitelist', rules: [] },
+  // rx 默认黑名单(全部转发):空白名单=全拦截,新用户极易踩"镜像无输出"的坑
+  rx: { enabled: true, mode: 'blacklist', rules: [] },
   inject: { enabled: false, mode: 'whitelist', rules: [] },
   ownTx: { enabled: false, mode: 'blacklist', rules: [] }
 })
