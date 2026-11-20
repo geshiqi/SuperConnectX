@@ -109,7 +109,7 @@
         </div>
 
         <!-- 串口镜像对话框 -->
-        <MirrorDialog v-model="mirrorDialogVisible" :com-name="props.connection.comName || ''" :session-id="String(props.connection.sessionId || '')" :connected="isConnected" />
+        <MirrorDialog v-model="mirrorDialogVisible" :com-name="props.connection.comName || ''" :session-id="String(props.connection.sessionId || '')" :connected="isConnected" :occupied-ports="props.openComPorts || []" />
 
         <!-- 更多设置对话框 -->
         <el-dialog v-model="showMoreDialog" :title="t('comTerminal.advancedSettings')" width="400px">
@@ -212,10 +212,13 @@ const props = withDefaults(defineProps<{
   }
   autoConnect?: boolean
   showBottomPanel?: boolean
+  /** 当前打开的串口标签页 comName 列表(镜像防呆用) */
+  openComPorts?: string[]
   onClose?: () => void
 }>(), {
   autoConnect: true,
-  showBottomPanel: true
+  showBottomPanel: true,
+  openComPorts: () => []
 })
 
 const unifiedTerminalRef = ref<InstanceType<typeof UnifiedTerminal>>()

@@ -58,6 +58,17 @@ export function defaultMirrorConfig(): MirrorConfig {
   }
 }
 
+/** 防御:补齐缺失的方向/字段(旧版持久化或异常入参导致缺 rx 时,decide 读 .enabled 会炸) */
+function normalizeConfig(config: Partial<MirrorConfig> | undefined): MirrorConfig {
+  const def = defaultMirrorConfig()
+  if (!config) return def
+  return {
+    rx: { ...def.rx, ...config.rx },
+    inject: { ...def.inject, ...config.inject },
+    ownTx: { ...def.ownTx, ...config.ownTx }
+  }
+}
+
 export default class SerialMirrorManager {
   private static sInstance: SerialMirrorManager
   private readonly sessions = new Map<string, MirrorSession>()
@@ -128,7 +139,8 @@ export default class SerialMirrorManager {
       return { success: false, message }
     }
     try {
-      const session: MirrorSession = { payload, port, stats: { rxFwd: 0, rxDrop: 0, injectFwd: 0, injectDrop: 0, ownTxFwd: 0 } }
+      const normalized = { ...payload, config: normalizeConfig(payload.config as Partial<MirrorConfig>) }
+      const session: MirrorSession = { payload: normalized, port, stats: { rxFwd: 0, rxDrop: 0, injectFwd: 0, injectDrop: 0, ownTxFwd: 0 } }
       port.on('data', (buf: Buffer) => this.onPairData(payload.sessionId, buf))
       port.on('close', () => {
         // 内端被关/出错:清理并通知(外端应用关闭串口通常不触发,com0com 对常驻)
@@ -219,7 +231,7 @@ export default class SerialMirrorManager {
   updateConfig(sessionId: string, config: MirrorConfig): { success: boolean; message?: string } {
     const session = this.sessions.get(sessionId)
     if (!session) return { success: false, message: 'mirror not active' }
-    session.payload.config = config
+    session.payload.config = normalizeConfig(config)
     return { success: true }
   }
 

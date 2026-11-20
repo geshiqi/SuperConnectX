@@ -11,6 +11,7 @@
       <el-select v-model="internalPort" size="small" style="width: 110px" :placeholder="t('mirror.portInternal')" @change="save">
         <el-option v-for="c in comPorts" :key="'i'+c" :label="c" :value="c" />
       </el-select>
+      <span v-if="exposedPort && occupiedPorts?.includes(exposedPort)" class="mirror-warn">{{ t('mirror.portOccupied') }}</span>
       <span v-if="!connected" class="mirror-warn">{{ t('mirror.needConnected') }}</span>
     </div>
 
@@ -57,7 +58,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { evaluateRules, type MirrorConfig, type MirrorRule } from '../../../../main/mirror/rules'
 
-const props = defineProps<{ comName: string; sessionId: string; connected: boolean }>()
+const props = defineProps<{ comName: string; sessionId: string; connected: boolean; occupiedPorts?: string[] }>()
 const visible = defineModel<boolean>({ default: false })
 const { t } = useI18n()
 
@@ -95,7 +96,16 @@ const load = (): void => {
     const raw = localStorage.getItem(cfgKey.value)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (parsed?.cfg) cfg.value = { ...defaultCfg(), ...parsed.cfg }
+      if (parsed?.cfg) {
+        // 深合并默认值:旧版存储可能缺方向/字段(缺 rx 时 decide 读 .enabled 会炸,
+        // 表现为"tap 挂了但转发恒0且终端报 concat error")
+        const def = defaultCfg()
+        cfg.value = {
+          rx: { ...def.rx, ...parsed.cfg?.rx },
+          inject: { ...def.inject, ...parsed.cfg?.inject },
+          ownTx: { ...def.ownTx, ...parsed.cfg?.ownTx }
+        }
+      }
       if (parsed?.exposed) exposedPort.value = parsed.exposed
     }
   } catch { /* ignore */ }

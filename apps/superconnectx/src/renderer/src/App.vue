@@ -211,6 +211,7 @@
                 :connection="tab"
                 :auto-connect="tab.wasConnected !== false"
                 :show-bottom-panel="showBottomPanel"
+                :open-com-ports="connectionTabs.filter(t => t.connectionType === 'com' && t.comName).map(t => t.comName as string)"
                 class="terminal-component"
                 @on-close="handleTerminalClose(tab.id)"
                 @command-sent="handleCommandSent"
