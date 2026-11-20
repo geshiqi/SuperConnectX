@@ -7,8 +7,6 @@ import type { ComTerminalRef } from './types'
 export interface SerialPortOccupancyOptions {
   connectionTabs: Ref<TabItem[]>
   comTerminalRefs: Record<string, ComTerminalRef>
-  /** 分屏布局的 Tab 关闭同步 */
-  onTabClosed: (tabId: string) => void
   /** 标签管理器的关闭（含 IPC 断开与资源清理） */
   closeTab: (tabId: string) => void | Promise<void>
 }
@@ -38,7 +36,7 @@ export interface SerialPortOccupancyController {
 export function useSerialPortOccupancy(
   options: SerialPortOccupancyOptions
 ): SerialPortOccupancyController {
-  const { connectionTabs, comTerminalRefs, onTabClosed, closeTab } = options
+  const { connectionTabs, comTerminalRefs, closeTab } = options
 
   const connectedSerialPorts = reactive<Record<string, boolean>>({})
 
@@ -70,10 +68,9 @@ export function useSerialPortOccupancy(
 
     const tabId = tab?.id?.toString() || connId.toString()
 
-    // 清理分屏面板中的该 tab
-    onTabClosed(tabId)
-
-    closeTab(connId.toString())
+    // 分屏面板中的该 tab 由 useSplitPanelController 监听 tabs 变化统一清理
+    // （closeTab 内部会移除 tab 并触发面板同步：tabIds 清理 / 激活回退 / 空面板合并）
+    closeTab(tabId)
   }
 
   const handleConnectClosed = (sessionId: number | string): void => {

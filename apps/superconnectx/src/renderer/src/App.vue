@@ -466,8 +466,7 @@ const {
   splitPanel,
   // removePanel,  // 预留，handleMergePanel 中使用
   switchPanelTab,
-  updateSplitRatio,
-  onTabClosed
+  updateSplitRatio
 } = useSplitWorkspace()
 
 // ---- 串口占用跟踪与终端关闭编排 ----
@@ -481,7 +480,6 @@ const {
 } = useSerialPortOccupancy({
   connectionTabs,
   comTerminalRefs,
-  onTabClosed,
   closeTab
 })
 

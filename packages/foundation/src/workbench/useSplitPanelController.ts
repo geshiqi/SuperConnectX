@@ -189,9 +189,12 @@ export function useSplitPanelController<T>(
             panel.tabIds.splice(i, 1)
           }
         }
-        // 如果 activeTabId 对应的 tab 已关闭，切换为第一个
+        // 如果 activeTabId 对应的 tab 已关闭，切换为本面板实际显示的第一个 tab。
+        // 注意：panel-0 的 tabIds 是含全部 tab 的备份列表，直接取 [0] 可能取到
+        // 已分屏到其它面板的 tab，导致本面板内容区空白。
         if (panel.activeTabId && !allIds.includes(panel.activeTabId)) {
-          panel.activeTabId = panel.tabIds.length > 0 ? panel.tabIds[0] : ''
+          const fallbackIds = panel.id === 'panel-0' ? getPanel0Tabs().map(getTabId) : panel.tabIds
+          panel.activeTabId = fallbackIds.length > 0 ? fallbackIds[0]! : ''
         }
       }
 
