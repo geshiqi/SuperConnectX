@@ -167,8 +167,10 @@ export default class IpcMain {
         if (closeAction === 'hide' && !isQuitting) {
           event.preventDefault()
           mainWindow.hide()
-        } else if (closeAction === 'quit' && !isQuitting) {
+        } else if (!isQuitting) {
           // 关闭到托盘未启用时退出，避免窗口消失后串口仍被后台进程持有。
+          // 不能只销毁主窗口依赖 window-all-closed 兜底：命令面板等常驻
+          // 辅助窗口(toggle 仅 hide 不销毁)会拦住该事件，导致应用后台驻留。
           event.preventDefault()
           app.quit()
         }
