@@ -340,6 +340,19 @@ describe('TelnetClient', () => {
       const r2 = await client.disconnect('d1')
       expect(r2.success).toBe(true)
     })
+
+    it('should notify onClose on explicit disconnect (aligned with ComClient savedOnClose)', async () => {
+      const onClose = vi.fn()
+      await client.start(
+        { host: '1.2.3.4', port: 23, username: '', password: '', sessionId: 'disc-cb' },
+        vi.fn(),
+        onClose,
+        vi.fn()
+      )
+
+      await expect(client.disconnect('disc-cb')).resolves.toMatchObject({ success: true })
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('updateConfig()', () => {

@@ -126,6 +126,48 @@ describe('ComClient', () => {
     })
   })
 
+  describe('updateConfig() reopen', () => {
+    it('should notify onClose when the reopened port closes (unplug after config change)', async () => {
+      const onClose = vi.fn()
+      await client.start(
+        { comName: 'COM1', sessionId: 'upd-close', host: '', port: 0, username: '', password: '' },
+        vi.fn(),
+        onClose,
+        vi.fn()
+      )
+
+      const result = await client.updateConfig('upd-close', { baudRate: 115200 })
+      expect((result as any).success).toBe(true)
+      expect(client.serialConnections.has('upd-close')).toBe(true)
+
+      // 配置变更重开后拔出端口：close 事件应通知上层（状态清理/渲染进程/镜像联动）
+      const connection = client.serialConnections.get('upd-close')!
+      connection.port.emit('close')
+
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(client.serialConnections.has('upd-close')).toBe(false)
+    })
+
+    it('should flush remaining buffer before notifying onClose', async () => {
+      const onData = vi.fn()
+      const onClose = vi.fn()
+      await client.start(
+        { comName: 'COM1', sessionId: 'upd-flush', host: '', port: 0, username: '', password: '' },
+        onData, onClose, vi.fn()
+      )
+
+      await client.updateConfig('upd-flush', { baudRate: 115200 })
+      const connection = client.serialConnections.get('upd-flush')!
+      connection.buffer = Buffer.from('remaining')
+      connection.port.emit('close')
+
+      expect(onData).toHaveBeenCalledWith(
+        expect.objectContaining({ data: 'remaining', timestamp: expect.any(String) })
+      )
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe('disconnect()', () => {
     it('waits for the serial port close callback before resolving', async () => {
       await startConnection('close-1')
@@ -148,6 +190,20 @@ describe('ComClient', () => {
       finishClose?.(null)
       await expect(disconnectPromise).resolves.toMatchObject({ success: true })
       expect(client.serialConnections.has('close-1')).toBe(false)
+    })
+
+    it('notifies onClose after a successful disconnect (savedOnClose)', async () => {
+      const onClose = vi.fn()
+      await client.start(
+        { comName: 'COM1', sessionId: 'close-cb', host: '', port: 0, username: '', password: '' },
+        vi.fn(),
+        onClose,
+        vi.fn()
+      )
+
+      await expect(client.disconnect('close-cb')).resolves.toMatchObject({ success: true })
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(client.serialConnections.has('close-cb')).toBe(false)
     })
 
     it('keeps the connection when closing the serial port fails', async () => {

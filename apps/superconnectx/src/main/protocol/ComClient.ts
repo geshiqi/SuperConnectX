@@ -551,7 +551,17 @@ export default class ComClient extends BaseClient {
               clearInterval(newConnection.flushTimer)
               newConnection.flushTimer = null
             }
+            // 关闭前输出缓冲区中剩余的数据
+            if (newConnection.buffer && newConnection.buffer.length > 0) {
+              const timestamp = BufferLineSplitter.timestamp()
+              const remainingStr = newConnection.splitter.decodeFull(newConnection.buffer)
+              newConnection.onData?.({ data: remainingStr, timestamp })
+              newConnection.onLog?.(newConnection.splitter.toLogLine(remainingStr), timestamp)
+              newConnection.buffer = Buffer.alloc(0)
+            }
             this.serialConnections.delete(connId)
+            // 与初始连接的 close 处理对齐：通知上层（DirectConnector 会做状态清理与镜像联动）
+            newConnection.onClose?.()
           })
 
           newPort.on('error', (err: Error) => {
@@ -643,7 +653,17 @@ export default class ComClient extends BaseClient {
             clearInterval(newConnection.flushTimer)
             newConnection.flushTimer = null
           }
+          // 关闭前输出缓冲区中剩余的数据
+          if (newConnection.buffer && newConnection.buffer.length > 0) {
+            const timestamp = BufferLineSplitter.timestamp()
+            const remainingStr = newConnection.splitter.decodeFull(newConnection.buffer)
+            newConnection.onData?.({ data: remainingStr, timestamp })
+            newConnection.onLog?.(newConnection.splitter.toLogLine(remainingStr), timestamp)
+            newConnection.buffer = Buffer.alloc(0)
+          }
           this.serialConnections.delete(connId)
+          // 与初始连接的 close 处理对齐：通知上层（DirectConnector 会做状态清理与镜像联动）
+          newConnection.onClose?.()
         })
 
         this.logger.info(`serial port recovered: ${comName} @ ${baudRate}`)

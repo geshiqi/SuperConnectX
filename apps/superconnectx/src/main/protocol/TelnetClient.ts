@@ -217,12 +217,23 @@ export default class TelnetClient extends BaseClient {
         connData.timer = null
       }
 
+      // 断开前刷新缓冲区中剩余的数据
+      if (connData && connData.buffer && connData.buffer.length > 0) {
+        const timestamp = BufferLineSplitter.timestamp()
+        const remainingStr = connData.splitter.decodeFull(connData.buffer)
+        connData.onData?.({ data: remainingStr, timestamp })
+        connData.onLog?.(remainingStr, timestamp)
+        connData.buffer = Buffer.alloc(0)
+      }
+
       // 主动断开前移除 close 事件监听器，防止触发 onClose 回调导致重连
       connection.removeAllListeners('close')
       connection.destroy()
       this.telnetConnections.delete(connId)
       this.connectionInfos.delete(connId)
       this.telnetConnectionData.delete(connId)
+      // 与 ComClient.disconnect 对齐：主动断开同样通知上层（状态清理 / 渲染进程通知）
+      connData?.onClose?.()
     } else {
       this.logger.warn('not find connId for disconnect', { connId })
     }

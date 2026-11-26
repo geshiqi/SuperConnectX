@@ -39,6 +39,19 @@ vi.mock('@/main/utils/ProtocolLogger', () => ({
   }
 }))
 
+const { mockMirrorOnSessionClosed } = vi.hoisted(() => {
+  return {
+    mockMirrorOnSessionClosed: vi.fn()
+  }
+})
+
+// Mock 串口镜像管理器（依赖 electron/serialport）：验证关闭路径的镜像联动清理
+vi.mock('@/main/mirror/SerialMirrorManager', () => ({
+  default: {
+    getInstance: () => ({ onSessionClosed: mockMirrorOnSessionClosed })
+  }
+}))
+
 import DirectConnector from '@/main/ipc/connectors/DirectConnector'
 import ConnectionStateManager from '@/main/ipc/connectors/ConnectionStateManager'
 import ProtocolLogger from '@/main/utils/ProtocolLogger'
@@ -337,6 +350,28 @@ describe('DirectConnector', () => {
       expect(result.success).toBe(false)
     })
 
+    it('onClose should trigger mirror session cleanup (unplug / disconnect)', async () => {
+      const { dc } = createDirectConnector()
+      const conn = makeConn({ connectionType: 'com', sessionId: 's-mirror' })
+      await dc.startConnection(conn, { host: '', port: 0, username: '', password: '', sessionId: 's-mirror' })
+
+      const onClose = mockComStart.mock.calls[0][2]
+      onClose()
+
+      expect(mockMirrorOnSessionClosed).toHaveBeenCalledWith('s-mirror')
+    })
+
+    it('stopConnection should trigger mirror session cleanup as a fallback', async () => {
+      const { dc } = createDirectConnector()
+      const conn = makeConn({ connectionType: 'com', sessionId: 's-mirror-stop' })
+      await dc.startConnection(conn, { host: '', port: 0, username: '', password: '', sessionId: 's-mirror-stop' })
+
+      await dc.stopConnection(conn)
+
+      // mock 的 disconnect 不回调 onClose，走 stopConnection 的兜底清理
+      expect(mockMirrorOnSessionClosed).toHaveBeenCalledWith('s-mirror-stop')
+    })
+
     it('should not let an old client onClose delete the new client', async () => {
       const { dc, sm } = createDirectConnector()
       const cleanupSpy = vi.spyOn(sm, 'cleanupOnClose')
@@ -345,10 +380,13 @@ describe('DirectConnector', () => {
       await dc.startConnection(conn, { host: '', port: 0, username: '', password: '', sessionId: 's-generations' })
       const oldOnClose = mockComStart.mock.calls[0][2]
       await dc.stopConnection(conn)
+      // stopConnection 兜底清理调用一次（mock disconnect 未回调 onClose）
+      expect(cleanupSpy).toHaveBeenCalledTimes(1)
       await dc.startConnection(conn, { host: '', port: 0, username: '', password: '', sessionId: 's-generations' })
 
       oldOnClose()
-      expect(cleanupSpy).toHaveBeenCalledTimes(0)
+      // 旧 client 的 onClose 不得再次触发清理（守卫生效）
+      expect(cleanupSpy).toHaveBeenCalledTimes(1)
       await expect(dc.sendData(conn, 'test')).resolves.toEqual({ success: true })
     })
 

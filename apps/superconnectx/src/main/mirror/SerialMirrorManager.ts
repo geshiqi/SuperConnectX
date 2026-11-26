@@ -250,4 +250,11 @@ export default class SerialMirrorManager {
   onSessionClosed(sessionId: string): void {
     if (this.sessions.has(sessionId)) void this.stop(sessionId)
   }
+
+  /** 应用退出时清理全部镜像会话(释放内口句柄,不必等进程退出由 OS 回收) */
+  async stopAll(): Promise<void> {
+    for (const sessionId of [...this.sessions.keys()]) {
+      await this.stop(sessionId)
+    }
+  }
 }

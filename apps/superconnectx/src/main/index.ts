@@ -132,6 +132,12 @@ logger.info(JSON.stringify(IpcMain.getInstance().getVersionInfo()))
 // 退出时释放多实例下标锁
 app.on('will-quit', () => {
   releaseInstanceLock()
+  // 优雅关闭全部串口镜像会话(释放 com0com 内口句柄,避免依赖进程退出由 OS 回收)
+  void SerialMirrorManager.getInstance()
+    .stopAll()
+    .catch(() => {
+      /* ignore */
+    })
 })
 
 // 迁移旧数据：如果 EXE 目录下存在旧的 userdata/backup，拷贝到 appDataDir 并删除旧目录

@@ -6,6 +6,7 @@
  */
 import ConnectionInfo from '../../protocol/ConnectionInfo'
 import ProtocolLogger from '../../utils/ProtocolLogger'
+import SerialMirrorManager from '../../mirror/SerialMirrorManager'
 import ConnectionStateManager from './ConnectionStateManager'
 
 interface DirectClient {
@@ -52,6 +53,14 @@ export default class DirectConnector {
       if (this.directClients.get(sessionId) !== client) return
       this.stateManager.cleanupOnClose(sessionId)
       this.directClients.delete(sessionId)
+      // 串口镜像联动清理（COM 全走 Direct 模式）：拔出/断开后释放镜像内口并通知 UI。
+      // 仅 Worker 模式在 IpcConnector 的关闭回调里清理，Direct 路径曾遗漏，
+      // 导致物理口拔出后镜像会话残留（内口占用 + 状态假活 + tap 悬挂）。
+      try {
+        SerialMirrorManager.getInstance().onSessionClosed(sessionId)
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -144,7 +153,16 @@ export default class DirectConnector {
     if (!client) return { success: true }
     const result = await client.disconnect(sessionId)
     if ((result as { success?: boolean })?.success !== false && this.directClients.get(sessionId) === client) {
+      // 此分支意味着 disconnect 未触发 onClose（如 Telnet 主动断开前已摘掉 close 监听）：
+      // 统一补齐关闭清理，与 onClose 路径对齐（状态表 / 渲染进程通知 / 镜像联动）。
+      // COM 的 disconnect 成功时已经回调 onClose 并完成清理，不会进入这里。
+      this.stateManager.cleanupOnClose(sessionId)
       this.directClients.delete(sessionId)
+      try {
+        SerialMirrorManager.getInstance().onSessionClosed(sessionId)
+      } catch {
+        /* ignore */
+      }
     }
     return result || { success: true }
   }
